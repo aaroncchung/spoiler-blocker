@@ -1,0 +1,27 @@
+# Secrets and machine-specific config
+local.properties
+*.keystore
+*.jks
+.env
+
+# Real captures from a phone (screen text, notifications). Never commit these.
+captures/
+*.capture.json
+
+# Model weights
+*.onnx
+*.gguf
+*.tflite
+*.litertlm
+*.safetensors
+
+# Android / Gradle build output
+.gradle/
+build/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store
