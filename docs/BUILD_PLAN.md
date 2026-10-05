@@ -50,10 +50,11 @@ are granted, reading logs.
 - Notification listener that dismisses matches.
 - "Hidden while blocking" list.
 - Status notification while any blocker is on.
-- A first, simple matcher.
+- A first, simple matcher. It lives in its own plain-Kotlin module from the
+  start, so that Phase 2 extends it instead of moving it.
 
-**Teaches:** Kotlin basics, Compose screens, saving data, the notification
-listener.
+**Teaches:** Kotlin basics, Compose screens, saving data, modules, the
+notification listener.
 
 **Done when:** with a blocker on for a race already watched, matching test
 notifications disappear and show up in the hidden list, and others are left
@@ -65,14 +66,14 @@ alone.
 
 **Build**
 
-- A separate plain-Kotlin matcher module: text normalisation, strong and weak
+- The real rules in the matcher module: text normalisation, strong and weak
   terms, sources, breadth.
 - Unit tests using hand-written examples.
 - The cloud LLM call that turns a description into the three lists.
 - A review screen for editing the lists before saving.
 - The API key read from local configuration that is never committed.
 
-**Teaches:** modules, unit testing, network calls, keeping secrets out of git.
+**Teaches:** unit testing, network calls, keeping secrets out of git.
 
 **Done when:** the tests pass, and creating a blocker for a past race gives
 lists that need only light editing.
@@ -86,10 +87,11 @@ is covered yet.
 
 - Accessibility service limited to watched apps and active only while a blocker
   is on.
+- Opt-in capture of screen structure to a private folder on the phone, and a
+  way to replay a capture through the grouping code in a unit test. This comes
+  before grouping, so that grouping is developed on the PC against recordings.
 - Grouping of on-screen text into posts, YouTube first.
 - A debug screen listing the posts the app sees and the verdict for each.
-- Opt-in capture of screen structure to a private folder on the phone, for
-  making test cases.
 
 **Teaches:** the accessibility service, the tree of on-screen elements,
 debugging on a device.
@@ -158,6 +160,47 @@ In this order unless Phase 6 says otherwise:
 4. On-device vision, starting with OneJev-0.8B, only if step 3 justifies it.
 5. More surfaces: Google Discover, Chrome, search suggestions.
 6. Work needed to publish on Google Play.
+
+## Pull request breakdown
+
+Each row is one pull request, built in one working session. A pull request is
+ticked off here in the same change that completes it.
+
+"Phone" says whether checking the result needs the phone in hand: **No** means
+unit tests are enough, **Check** means a short manual checklist in the pull
+request, **Yes** means the work itself cannot be done without the phone.
+
+| # | Phase | Pull request | Phone | Done |
+|---|---|---|---|---|
+| 0a | 0 | Probe apps for E2 to E6, on a `probe` branch that is never merged | Yes | |
+| 0b | 0 | `docs/FINDINGS.md` and the architecture status updates | Yes | |
+| 1 | 1 | Project skeleton: Gradle, a first screen, `CLAUDE.md`, CI | Check | ✓ |
+| 2 | 1 | `:matcher` module with the simple matcher and its tests | No | |
+| 3 | 1 | Blocker storage, and the screens to create, edit, delete and switch one | Check | |
+| 4 | 1 | Notification listener, dismissal and the hidden list | Check | |
+| 5 | 1 | Status notification while a blocker is on | Check | |
+| 6 | 2 | The real matching rules, with tests | No | |
+| 7 | 2 | Keyword expansion call, with the API key in untracked local config | No | |
+| 8 | 2 | Review screen for the expanded lists | Check | |
+| 9 | 3 | Accessibility service skeleton: watch list, active only while a blocker is on | Check | |
+| 10 | 3 | Opt-in capture and the replay test harness | Check | |
+| 11 | 3 | YouTube post grouping, developed against replays. Waits for E1. | No | |
+| 12 | 3 | Debug screen with posts and verdicts | Check | |
+| 13 | 4 | Overlay manager: boxes on matched posts | Yes | |
+| 14 | 4 | Cover on scroll and reveal after checking. Waits for E2 and E3. | Yes | |
+| 15 | 4 | Rotation and the full-screen player | Yes | |
+| 16 | 4 | Health monitor | Check | |
+| 17 | 5 | Instagram home feed grouping. Waits for E1. | No | |
+| 18 | 5 | Setup screen for permissions and the One UI battery setting | Yes | |
+| 19 | 5 | Performance pass | Yes | |
+| 20 | 6 | Evaluation script. The labelled data stays outside the repository. | No | |
+| 21 | 6 | The decisions that follow from the evaluation | No | |
+
+Two rules about order:
+
+- Rows 11, 13, 14, 15 and 17 are not started until Phase 0 has answered the
+  question they depend on.
+- Phase 1 and Phase 2 do not depend on Phase 0 and can be built before it.
 
 ## Testing approach
 

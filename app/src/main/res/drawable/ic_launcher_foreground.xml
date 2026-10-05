@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three lines of a feed, the middle one covered by a box. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#5C6670"
+        android:pathData="M34,36h40a3,3 0,0 1,0 6h-40a3,3 0,0 1,0 -6z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,47h42a3,3 0,0 1,3 3v8a3,3 0,0 1,-3 3h-42a3,3 0,0 1,-3 -3v-8a3,3 0,0 1,3 -3z" />
+    <path
+        android:fillColor="#5C6670"
+        android:pathData="M34,66h40a3,3 0,0 1,0 6h-40a3,3 0,0 1,0 -6z" />
+</vector>
