@@ -1,6 +1,7 @@
 # Architecture: Spoiler Blocker v1
 
-Last updated: 2026-10-05. Status: design phase, no code yet.
+Last updated: 2026-10-05. Status: early build. The
+[build plan](BUILD_PLAN.md) shows what exists so far.
 
 ## What v1 is
 

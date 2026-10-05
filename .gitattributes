@@ -1,0 +1,5 @@
+# Keep line endings stable across Windows and the Linux CI runner.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary

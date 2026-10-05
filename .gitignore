@@ -25,3 +25,6 @@ build/
 .idea/
 *.iml
 .DS_Store
+
+# Kotlin compiler session files
+.kotlin/
