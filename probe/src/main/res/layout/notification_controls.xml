@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The expanded view of the probe's control notification: seven buttons in
+    two rows. A standard notification can only show three buttons, hence this.
+    Android shows it inside its usual notification frame.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Which mechanism and tracking mode are in use. Filled in by ProbeNotifications. -->
+    <TextView
+        android:id="@+id/control_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/control_repick"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_repick" />
+
+        <TextView
+            android:id="@+id/control_next_list"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_next_list" />
+
+        <TextView
+            android:id="@+id/control_next_mechanism"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_next_mechanism" />
+
+        <TextView
+            android:id="@+id/control_summary"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_summary" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/control_screenshot"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_screenshot" />
+
+        <TextView
+            android:id="@+id/control_rate_test"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_rate_test" />
+
+        <TextView
+            android:id="@+id/control_dump_tree"
+            style="@style/ProbeControlButton"
+            android:text="@string/action_dump_tree" />
+    </LinearLayout>
+</LinearLayout>

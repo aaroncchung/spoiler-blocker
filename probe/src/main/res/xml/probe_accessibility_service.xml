@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What the probe's accessibility service asks Android for. Each line is
+    needed by an experiment; nothing else is requested.
+
+    accessibilityEventTypes
+        Scroll and content-change events drive the box (E2). Window-state
+        events say that another app or screen came to the front. The touch
+        and gesture types are listed so that E3 can report whether Android
+        ever sends them to a service like this one.
+    notificationTimeout="0"
+        Deliver every event at once. A larger value makes Android hold events
+        back, which would be measured as lag.
+    canRetrieveWindowContent
+        Read the layout and text of the app in front (E1, E2).
+    canTakeScreenshot
+        Take the per-window screenshot (E5).
+    flagReportViewIds
+        Include each element's developer-given id in the E1 dump.
+    flagIncludeNotImportantViews
+        Include layout-only elements too. The E1 dump marks them, so both
+        views of the tree can be read from one file.
+    isAccessibilityTool="false"
+        The probe is not an assistive tool and does not claim to be. Apps can
+        hide sensitive views from services that are not; the E1 dump shows
+        what such a service really gets.
+
+    Not requested: gestures, key events, touch exploration, magnification,
+    interactive windows.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewScrolled|typeWindowContentChanged|typeWindowStateChanged|typeTouchInteractionStart|typeTouchInteractionEnd|typeGestureDetectionStart|typeGestureDetectionEnd|typeTouchExplorationGestureStart|typeTouchExplorationGestureEnd"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews"
+    android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
+    android:description="@string/a11y_service_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="0"
+    android:settingsActivity="io.github.aaroncchung.spoilerblocker.probe.MainActivity"
+    android:summary="@string/a11y_service_summary" />

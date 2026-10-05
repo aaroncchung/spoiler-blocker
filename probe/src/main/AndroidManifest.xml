@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- For the probe's own notifications: the control buttons and the E4 test banner. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        allowBackup is off and the extraction rules exclude everything: the
+        log, the dumps and the screenshots must stay on the phone.
+    -->
+    <application
+        android:name=".ProbeApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Probe">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            "exported" lets Android itself start the service. The permission
+            is one only the system holds, so no other app can connect to it.
+        -->
+        <service
+            android:name=".ProbeAccessibilityService"
+            android:exported="true"
+            android:label="@string/a11y_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/probe_accessibility_service" />
+        </service>
+
+        <service
+            android:name=".ProbeNotificationListener"
+            android:exported="true"
+            android:label="@string/listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!--
+            Triggers from "adb shell am broadcast" and from the probe's own
+            notification buttons. android.permission.DUMP is held by adb's
+            shell and by the system but not by ordinary apps, so no other app
+            on the phone can make the probe act. The probe's own buttons are
+            allowed because an app may always send to itself.
+        -->
+        <receiver
+            android:name=".TriggerReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
+
+</manifest>

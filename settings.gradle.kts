@@ -23,3 +23,5 @@ dependencyResolutionManagement {
 rootProject.name = "spoiler-blocker"
 
 include(":app")
+// The Phase 0 measuring instrument. It exists only on the `probe` branch.
+include(":probe")

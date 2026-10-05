@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only what the system needs before Compose draws the first frame. -->
+    <style name="Theme.Probe" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <color name="ic_launcher_background">#4A148C</color>
+
+    <!--
+        One button of the control notification. The text appearance is the
+        system's own for notification titles, so it stays readable in both
+        the light and the dark notification shade.
+    -->
+    <style name="ProbeControlButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textAppearance">@android:style/TextAppearance.Material.Notification.Title</item>
+    </style>
+</resources>
