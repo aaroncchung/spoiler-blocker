@@ -198,7 +198,7 @@ private fun EnabledRow(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             // The whole row is the switch, which makes it easy to hit and
-            // lets a screen reader say "On, switch" as one thing.
+            // lets a screen reader say "On, Blocking, switch" as one thing.
             .toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

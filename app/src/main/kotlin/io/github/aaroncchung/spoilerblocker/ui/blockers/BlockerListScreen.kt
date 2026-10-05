@@ -125,7 +125,12 @@ private fun BlockerRow(
     onEnabledChange: (Boolean) -> Unit,
 ) {
     ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(
+            // Without a label a screen reader only says "double tap to
+            // activate", which does not say that the row opens the editor.
+            onClickLabel = stringResource(R.string.blockers_row_action),
+            onClick = onClick,
+        ),
         headlineContent = {
             Text(blocker.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
         },

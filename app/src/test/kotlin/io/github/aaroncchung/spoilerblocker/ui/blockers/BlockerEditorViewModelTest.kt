@@ -315,18 +315,55 @@ class BlockerEditorViewModelTest {
     }
 
     @Test
-    fun `save after delete does not bring the blocker back`() = runTest {
+    fun `save pressed straight after delete does not bring the blocker back`() = runTest {
         val repository = newRepository()
         repository.save(race)
         val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
         advanceUntilIdle()
 
+        // No advanceUntilIdle() between the two: Save arrives while the
+        // delete has been asked for but is not written yet.
         viewModel.delete()
-        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.canSave)
         viewModel.save()
         advanceUntilIdle()
 
         assertEquals(emptyList<Blocker>(), repository.blockers.first())
+    }
+
+    @Test
+    fun `delete pressed straight after save is ignored`() = runTest {
+        val repository = newRepository()
+        repository.save(race)
+        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        advanceUntilIdle()
+
+        viewModel.onNameChange("Japanese GP")
+        viewModel.save()
+        viewModel.delete()
+        advanceUntilIdle()
+
+        assertEquals(listOf(race.copy(name = "Japanese GP")), repository.blockers.first())
+    }
+
+    @Test
+    fun `a later change in storage does not overwrite what is being typed`() = runTest {
+        val repository = newRepository()
+        repository.save(race)
+        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        advanceUntilIdle()
+        viewModel.onNameChange("Typed name")
+        viewModel.removeTerm("Suzuka")
+        viewModel.onEnabledChange(true)
+
+        // Something else changes the stored blocker while the editor is open.
+        repository.save(race.copy(name = "Stored name", strongTerms = listOf("stored")))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Typed name", state.name)
+        assertEquals(listOf("Japanese Grand Prix"), state.terms)
+        assertTrue(state.enabled)
     }
 
     @Test

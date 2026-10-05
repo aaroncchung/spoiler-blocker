@@ -34,14 +34,18 @@ data class BlockerEditorUiState(
     val terms: List<String> = emptyList(),
     /** The text in the term field that has not been added to [terms] yet. */
     val termDraft: String = "",
-    /** True once the blocker is saved or deleted. The screen closes when it sees this. */
+    /**
+     * True from the moment Save or Delete is pressed. Writing the file takes
+     * a moment after that, and the screen can still be tapped while it fades
+     * out. Without this, Save pressed just after Delete would bring the
+     * blocker back.
+     */
+    val isClosing: Boolean = false,
+    /** True once the save or delete is written. The screen closes when it sees this. */
     val isFinished: Boolean = false,
 ) {
-    // The screen can still be tapped while it fades out. Without the
-    // isFinished check, Save pressed just after Delete would bring the
-    // blocker back.
     val canSave: Boolean
-        get() = !isLoading && !isFinished && name.isNotBlank()
+        get() = !isLoading && !isClosing && name.isNotBlank()
 }
 
 /**
@@ -118,6 +122,9 @@ class BlockerEditorViewModel(
     fun save() {
         val state = _uiState.value
         if (!state.canSave) return
+        // Set here, not in the coroutine below, so that it is already true
+        // when the next tap arrives.
+        _uiState.update { it.copy(isClosing = true) }
 
         val name = state.name.trim()
         // A term that was typed but never added is added now. Dropping it
@@ -141,6 +148,9 @@ class BlockerEditorViewModel(
     }
 
     fun delete() {
+        if (_uiState.value.isClosing) return
+        _uiState.update { it.copy(isClosing = true) }
+
         viewModelScope.launch {
             repository.delete(id)
             _uiState.update { it.copy(isFinished = true) }

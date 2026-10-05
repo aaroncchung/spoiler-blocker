@@ -45,15 +45,31 @@ class BlockerRepository(
         storage = OkioStorage(FileSystem.SYSTEM, StoredBlockersSerializer) {
             produceFile().toOkioPath()
         },
-        // A file that cannot be read is replaced with an empty list. Without
-        // this the app would crash on every launch until its data was cleared.
-        corruptionHandler = ReplaceFileCorruptionHandler { StoredBlockers() },
+        // Runs when the file cannot be read as blockers, and starts again from
+        // an empty list. Without it the app would crash on every launch until
+        // its data was cleared. But an empty list means nothing is blocked,
+        // so the unreadable file is first kept beside the real one, as
+        // blockers.json.unreadable. The blockers in it can then be recovered
+        // by hand, and the copy shows why they went missing. If the copy
+        // cannot be made, the read fails and the file is left alone.
+        corruptionHandler = ReplaceFileCorruptionHandler {
+            val unreadable = produceFile()
+            unreadable.copyTo(
+                File(unreadable.parentFile, unreadable.name + ".unreadable"),
+                overwrite = true,
+            )
+            StoredBlockers()
+        },
         scope = scope,
     )
 
     /**
      * Every blocker, on or off, oldest first. Collecting this gives the
      * current list straight away and then a new list after each change.
+     *
+     * Collecting it, like every change below, fails with an
+     * IllegalStateException if the file was written by a newer build of the
+     * app. See `CURRENT_VERSION`.
      */
     val blockers: Flow<List<Blocker>> = dataStore.data.map { it.blockers }
 
@@ -83,25 +99,44 @@ class BlockerRepository(
     // updateData runs one change at a time and returns once the file is
     // written, so two quick changes cannot overwrite each other.
     private suspend fun update(change: (List<Blocker>) -> List<Blocker>) {
-        dataStore.updateData { stored -> stored.copy(blockers = change(stored.blockers)) }
+        dataStore.updateData { stored ->
+            // Whatever version the file had, it is in this build's layout now.
+            stored.copy(version = CURRENT_VERSION, blockers = change(stored.blockers))
+        }
     }
 }
 
 /**
- * The contents of the file. [version] is there so that a later version of the
- * app can tell an old layout from a new one and convert it.
+ * The version of the file layout that this build writes.
+ *
+ * Raise it whenever the stored shape changes, and that includes adding a field
+ * to [Blocker]. An older build does not know the new field. It could load the
+ * file all the same, and would then write it back without the field. The
+ * version is how the older build knows to refuse the file instead.
  */
+private const val CURRENT_VERSION = 1
+
+/** The contents of the file. */
 @Serializable
 private data class StoredBlockers(
-    val version: Int = 1,
+    val version: Int = CURRENT_VERSION,
     val blockers: List<Blocker> = emptyList(),
 )
+
+/**
+ * Just the version of a file. It is read by itself first, because a newer
+ * build may have changed the rest into something this build cannot read.
+ */
+@Serializable
+private class StoredVersion(val version: Int)
 
 /** Tells DataStore how to turn [StoredBlockers] into the text of the file and back. */
 private object StoredBlockersSerializer : OkioSerializer<StoredBlockers> {
     private val json = Json {
-        // A file written by a later version of the app may have fields this
-        // version does not know. They are skipped instead of failing the read.
+        // A field this build does not know is skipped. Without this it would
+        // make the whole file count as unreadable. It is a safety net only:
+        // the skipped field is lost at the next change, which is why the
+        // version has to be raised when a field is added.
         ignoreUnknownKeys = true
         // Values equal to their default are normally left out. This keeps
         // "version" in the file.
@@ -111,14 +146,25 @@ private object StoredBlockersSerializer : OkioSerializer<StoredBlockers> {
     /** What the repository holds before the file exists. */
     override val defaultValue = StoredBlockers()
 
-    override suspend fun readFrom(source: BufferedSource): StoredBlockers =
+    override suspend fun readFrom(source: BufferedSource): StoredBlockers {
+        val text = source.readUtf8()
         try {
-            json.decodeFromString<StoredBlockers>(source.readUtf8())
+            val version = json.decodeFromString<StoredVersion>(text).version
+            // check throws IllegalStateException, which the catch below lets
+            // through. That is deliberate. A CorruptionException would make
+            // DataStore replace the file, and a file from a newer build must
+            // be left exactly as it is.
+            check(version <= CURRENT_VERSION) {
+                "blockers.json was written by a newer build (version $version). " +
+                    "Install the newer build again, or clear the app's data."
+            }
+            return json.decodeFromString<StoredBlockers>(text)
         } catch (e: SerializationException) {
             // CorruptionException is what makes DataStore run the corruption
             // handler above.
             throw CorruptionException("The blockers file is not valid.", e)
         }
+    }
 
     override suspend fun writeTo(t: StoredBlockers, sink: BufferedSink) {
         sink.writeUtf8(json.encodeToString(t))

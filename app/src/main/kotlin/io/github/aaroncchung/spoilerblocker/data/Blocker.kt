@@ -6,9 +6,14 @@ import kotlinx.serialization.Serializable
  * A topic the owner does not want spoiled. While it is [enabled], anything
  * that matches its terms is hidden.
  *
- * Blockers are stored as JSON by [BlockerRepository]. A field added later
- * needs a default value, so that blockers saved by an older version of the
- * app still load.
+ * Blockers are stored as JSON by [BlockerRepository], so adding a field here
+ * changes the stored format. Two things then have to be done:
+ * - give the field a default value, so that blockers saved by an older build
+ *   still load;
+ * - raise `CURRENT_VERSION` in `BlockerRepository.kt`, so that an older build
+ *   refuses the new file instead of quietly dropping the field.
+ *
+ * `BlockerRepositoryTest` pins the format and fails until both are done.
  */
 @Serializable
 data class Blocker(
