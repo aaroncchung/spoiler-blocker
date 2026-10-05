@@ -36,6 +36,9 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | Path | What is in it |
 |---|---|
 | `app/` | The Android app. Package `io.github.aaroncchung.spoilerblocker`. |
+| `app/…/SpoilerBlockerApplication.kt` | The Application and `AppContainer`, which owns the objects shared by the whole app. |
+| `app/…/data/` | `Blocker` and `BlockerRepository`. Blockers are stored as JSON in `files/blockers.json`. |
+| `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
@@ -52,7 +55,14 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 - Logic that does not need Android goes in plain Kotlin, so it can be unit
   tested on a PC. Every pull request with logic has tests for it.
 - No dependency injection framework and no new library without a reason given
-  in the pull request.
+  in the pull request. Shared objects live in `AppContainer`.
+- There is one `BlockerRepository` per process; get it from `AppContainer`. A
+  second one on the same file throws.
+- A new field on `Blocker` needs a default value, so that blockers stored by
+  an older build still load, and a raised `CURRENT_VERSION` in
+  `BlockerRepository.kt`, so that an older build refuses the newer file
+  instead of stripping the field. Add a new frozen document to
+  `BlockerRepositoryTest` at the same time.
 - User-visible text goes in `res/values/strings.xml`.
 - Screen text is never stored or sent anywhere in normal use (decision 15).
   Only the description typed for a blocker ever leaves the phone (decision 8).

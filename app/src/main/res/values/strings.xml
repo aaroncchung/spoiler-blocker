@@ -1,4 +1,30 @@
 <resources>
     <string name="app_name">Spoiler Blocker</string>
+
+    <!-- Blocker list -->
     <string name="blockers_empty">No blockers yet.</string>
+    <string name="blockers_new">New blocker</string>
+    <string name="blockers_no_terms">No terms</string>
+    <!-- What a tap on a row does. A screen reader says it after "Double tap to". -->
+    <string name="blockers_row_action">edit</string>
+
+    <!-- Blocker editor -->
+    <string name="editor_title_new">New blocker</string>
+    <string name="editor_title_edit">Edit blocker</string>
+    <string name="editor_back">Back</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_delete">Delete</string>
+    <string name="editor_name">Name</string>
+    <!-- Not "On": a screen reader says the state first, and "Off, On, switch" makes no sense. -->
+    <string name="editor_enabled">Blocking</string>
+    <string name="editor_terms_title">Terms</string>
+    <string name="editor_term_field">Word or phrase</string>
+    <string name="editor_term_add">Add</string>
+    <string name="editor_terms_helper">Anything containing one of these words or phrases is hidden.</string>
+    <string name="editor_terms_empty">No terms yet, so this blocker hides nothing.</string>
+    <!-- Read out by a screen reader for the chip of one term, for example "Remove Suzuka". -->
+    <string name="editor_term_remove">Remove %1$s</string>
+    <string name="editor_delete_title">Delete this blocker?</string>
+    <string name="editor_delete_text">This cannot be undone.</string>
+    <string name="editor_delete_cancel">Cancel</string>
 </resources>
