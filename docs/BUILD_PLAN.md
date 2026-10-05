@@ -175,7 +175,7 @@ request, **Yes** means the work itself cannot be done without the phone.
 | 0a | 0 | Probe apps for E2 to E6, on a `probe` branch that is never merged | Yes | |
 | 0b | 0 | `docs/FINDINGS.md` and the architecture status updates | Yes | |
 | 1 | 1 | Project skeleton: Gradle, a first screen, `CLAUDE.md`, CI | Check | ✓ |
-| 2 | 1 | `:matcher` module with the simple matcher and its tests | No | |
+| 2 | 1 | `:matcher` module with the simple matcher and its tests | No | ✓ |
 | 3 | 1 | Blocker storage, and the screens to create, edit, delete and switch one | Check | |
 | 4 | 1 | Notification listener, dismissal and the hidden list | Check | |
 | 5 | 1 | Status notification while a blocker is on | Check | |

@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 rootProject.name = "spoiler-blocker"
 
 include(":app")
+include(":matcher")

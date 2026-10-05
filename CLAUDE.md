@@ -28,6 +28,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 |---|---|
 | `./gradlew build` | Compiles everything, runs unit tests and lint. CI runs exactly this. |
 | `./gradlew :app:testDebugUnitTest` | Unit tests for the app module only. |
+| `./gradlew :matcher:test` | Unit tests for the matcher. Plain JVM, no phone needed. |
 | `./gradlew :app:installDebug` | Installs the debug build on a connected phone or emulator. |
 
 ## Layout
@@ -35,6 +36,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | Path | What is in it |
 |---|---|
 | `app/` | The Android app. Package `io.github.aaroncchung.spoilerblocker`. |
+| `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
 | `docs/` | Architecture, build plan and, later, Phase 0 findings. |
