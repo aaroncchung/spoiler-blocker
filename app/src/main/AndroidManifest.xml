@@ -14,9 +14,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SpoilerBlocker">
 
+        <!--
+            adjustResize: Android tells the app how much room the keyboard
+            takes, and the screens make way for it themselves. The other
+            modes slide the whole window up, top bar included.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
