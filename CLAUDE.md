@@ -59,7 +59,10 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 - There is one `BlockerRepository` per process; get it from `AppContainer`. A
   second one on the same file throws.
 - A new field on `Blocker` needs a default value, so that blockers stored by
-  an older build still load.
+  an older build still load, and a raised `CURRENT_VERSION` in
+  `BlockerRepository.kt`, so that an older build refuses the newer file
+  instead of stripping the field. Add a new frozen document to
+  `BlockerRepositoryTest` at the same time.
 - User-visible text goes in `res/values/strings.xml`.
 - Screen text is never stored or sent anywhere in normal use (decision 15).
   Only the description typed for a blocker ever leaves the phone (decision 8).
