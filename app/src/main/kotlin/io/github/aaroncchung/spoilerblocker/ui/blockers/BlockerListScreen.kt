@@ -1,5 +1,9 @@
 package io.github.aaroncchung.spoilerblocker.ui.blockers
 
+import android.Manifest
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -24,9 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +54,12 @@ import io.github.aaroncchung.spoilerblocker.data.Blocker
 import io.github.aaroncchung.spoilerblocker.notifications.isNotificationAccessGranted
 import io.github.aaroncchung.spoilerblocker.notifications.openNotificationAccessSettings
 import io.github.aaroncchung.spoilerblocker.notifications.requestListenerRebindIfDisconnected
+import io.github.aaroncchung.spoilerblocker.status.PostPermissionRequest
+import io.github.aaroncchung.spoilerblocker.status.PostPermissionStep
+import io.github.aaroncchung.spoilerblocker.status.canPostNotifications
+import io.github.aaroncchung.spoilerblocker.status.openAppNotificationSettings
+import io.github.aaroncchung.spoilerblocker.status.postPermissionStep
+import io.github.aaroncchung.spoilerblocker.status.wasPostPermissionRefused
 import io.github.aaroncchung.spoilerblocker.ui.theme.SpoilerBlockerTheme
 
 /**
@@ -69,21 +82,57 @@ fun BlockerListScreen(
     // Android does not tell the app when it changes. So it is checked each
     // time the app comes to the front, which includes coming back from the
     // settings screen that the card's button opens.
+    // The same goes for the permission to post notifications.
     val context = LocalContext.current
+    // The screen is only ever shown by MainActivity, so there is an activity.
+    val activity = checkNotNull(LocalActivity.current)
     var hasNotificationAccess by remember { mutableStateOf(isNotificationAccessGranted(context)) }
+    var mayPost by remember { mutableStateOf(canPostNotifications(context)) }
+    var refusedToPost by remember { mutableStateOf(wasPostPermissionRefused(activity)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         hasNotificationAccess = isNotificationAccessGranted(context)
+        mayPost = canPostNotifications(context)
+        refusedToPost = wasPostPermissionRefused(activity)
         requestListenerRebindIfDisconnected(context)
+    }
+
+    val anyBlockerOn = uiState.blockers.any { it.enabled }
+
+    // rememberSaveable and not remember, so that turning the phone while
+    // Android's dialog is up does not make the app ask a second time.
+    var permissionRequest by rememberSaveable { mutableStateOf(PostPermissionRequest.NOT_ASKED) }
+    // The launcher shows Android's dialog and calls back with the answer.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        mayPost = granted
+        permissionRequest = PostPermissionRequest.ANSWERED
+    }
+    val permissionStep = postPermissionStep(
+        blockerOn = anyBlockerOn,
+        canPost = mayPost,
+        refusedBefore = refusedToPost,
+        request = permissionRequest,
+    )
+    // Showing a dialog is not something to do in the middle of drawing the
+    // screen. A LaunchedEffect runs afterwards, each time the step changes.
+    LaunchedEffect(permissionStep) {
+        if (permissionStep == PostPermissionStep.ASK) {
+            permissionRequest = PostPermissionRequest.ASKING
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     BlockerListContent(
         uiState = uiState,
         // Without notification access a blocker that is on hides nothing,
         // and nothing else in the app would say so.
-        showNotificationAccessCard = !hasNotificationAccess && uiState.blockers.any { it.enabled },
+        showNotificationAccessCard = !hasNotificationAccess && anyBlockerOn,
+        showPostNotificationsCard = permissionStep == PostPermissionStep.SHOW_CARD,
         onOpenEditor = onOpenEditor,
         onOpenHiddenList = onOpenHiddenList,
         onOpenNotificationAccess = { openNotificationAccessSettings(context) },
+        onOpenNotificationSettings = { openAppNotificationSettings(context) },
         onEnabledChange = viewModel::setEnabled,
     )
 }
@@ -97,9 +146,11 @@ fun BlockerListScreen(
 private fun BlockerListContent(
     uiState: BlockerListUiState,
     showNotificationAccessCard: Boolean,
+    showPostNotificationsCard: Boolean,
     onOpenEditor: (blockerId: String?) -> Unit,
     onOpenHiddenList: () -> Unit,
     onOpenNotificationAccess: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onEnabledChange: (id: String, enabled: Boolean) -> Unit,
 ) {
     Scaffold(
@@ -159,7 +210,30 @@ private fun BlockerListContent(
             ) {
                 if (showNotificationAccessCard) {
                     item(key = "notification access") {
-                        NotificationAccessCard(onOpenSettings = onOpenNotificationAccess)
+                        SetupCard(
+                            title = stringResource(R.string.access_card_title),
+                            text = stringResource(R.string.access_card_text),
+                            buttonText = stringResource(R.string.access_card_button),
+                            onButtonClick = onOpenNotificationAccess,
+                            // The colours Material keeps for "something is
+                            // wrong": with this missing, nothing is hidden.
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            ),
+                        )
+                    }
+                }
+                if (showPostNotificationsCard) {
+                    item(key = "post notifications") {
+                        // In a card's usual colours: blocking works without
+                        // this, only the reminder is missing.
+                        SetupCard(
+                            title = stringResource(R.string.post_card_title),
+                            text = stringResource(R.string.post_card_text),
+                            buttonText = stringResource(R.string.post_card_button),
+                            onButtonClick = onOpenNotificationSettings,
+                        )
                     }
                 }
                 // The key tells Compose which row is which when the list changes.
@@ -175,33 +249,32 @@ private fun BlockerListContent(
     }
 }
 
-/** Says that a blocker is on but cannot hide notifications, and offers the way to fix it. */
+/**
+ * A card above the blockers that says what the app is not allowed to do, with
+ * a button that opens the system settings screen where the owner can allow it.
+ */
 @Composable
-private fun NotificationAccessCard(onOpenSettings: () -> Unit) {
+private fun SetupCard(
+    title: String,
+    text: String,
+    buttonText: String,
+    onButtonClick: () -> Unit,
+    colors: CardColors = CardDefaults.cardColors(),
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        // The colours Material keeps for "something is wrong".
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        ),
+        colors = colors,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                stringResource(R.string.access_card_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                stringResource(R.string.access_card_text),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Button(onClick = onOpenSettings) {
-                Text(stringResource(R.string.access_card_button))
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(text, style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = onButtonClick) {
+                Text(buttonText)
             }
         }
     }
@@ -269,9 +342,11 @@ private fun BlockerListPreview() {
                 hiddenCount = 3,
             ),
             showNotificationAccessCard = true,
+            showPostNotificationsCard = true,
             onOpenEditor = {},
             onOpenHiddenList = {},
             onOpenNotificationAccess = {},
+            onOpenNotificationSettings = {},
             onEnabledChange = { _, _ -> },
         )
     }
@@ -284,9 +359,11 @@ private fun BlockerListEmptyPreview() {
         BlockerListContent(
             uiState = BlockerListUiState(isLoading = false),
             showNotificationAccessCard = false,
+            showPostNotificationsCard = false,
             onOpenEditor = {},
             onOpenHiddenList = {},
             onOpenNotificationAccess = {},
+            onOpenNotificationSettings = {},
             onEnabledChange = { _, _ -> },
         )
     }

@@ -27,7 +27,8 @@
     <!--
         Needed since Android 13 to post any notification. This app posts one:
         the status notification that shows while a blocker is on. Declaring
-        the permission only makes it possible to ask the owner for it.
+        the permission only makes it possible to ask. The owner is asked on
+        the blocker list, the first time a blocker is on.
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 

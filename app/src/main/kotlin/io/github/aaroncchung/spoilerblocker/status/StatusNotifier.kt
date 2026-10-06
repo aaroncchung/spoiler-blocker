@@ -85,7 +85,8 @@ class StatusNotifier(private val context: Context) {
         } else {
             // Posting under the id of a notification that is showing
             // replaces it. If the owner has not allowed the app to post
-            // notifications, Android drops this without an error.
+            // notifications, Android drops this without an error, and the
+            // blocker list shows a card about it.
             notificationManager.notify(NOTIFICATION_ID, build(content))
         }
     }

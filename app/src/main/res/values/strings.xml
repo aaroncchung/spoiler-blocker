@@ -16,6 +16,11 @@
     <string name="access_card_text">A blocker is on, but Spoiler Blocker is not allowed to see notifications. Allow notification access for it in the system settings.</string>
     <string name="access_card_button">Open settings</string>
 
+    <!-- The card on the blocker list when a blocker is on and the app may not post notifications -->
+    <string name="post_card_title">No reminder that a blocker is on</string>
+    <string name="post_card_text">Spoiler Blocker shows a notification while a blocker is on, so that the blocker is not forgotten. It is not allowed to show notifications. Allow them in the system settings.</string>
+    <string name="post_card_button">Open settings</string>
+
     <!-- The status notification. Its channel is what the system settings list for this app. -->
     <string name="status_channel_name">Blocking status</string>
     <string name="status_channel_description">Shows while a blocker is on.</string>
