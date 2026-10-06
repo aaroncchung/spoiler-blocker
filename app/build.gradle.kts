@@ -35,6 +35,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Generates the BuildConfig class. The notification listener reads
+        // BuildConfig.DEBUG so that it only writes to the log in debug builds.
+        buildConfig = true
     }
 
     lint {

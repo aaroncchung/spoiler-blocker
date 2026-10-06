@@ -5,7 +5,11 @@ import android.content.Context
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.aaroncchung.spoilerblocker.data.BlockerRepository
+import io.github.aaroncchung.spoilerblocker.data.HiddenNotificationRepository
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Android creates one of these when the app's process starts, before any
@@ -38,6 +42,20 @@ class AppContainer(context: Context) {
         // filesDir is the app's private storage. Other apps cannot read it.
         BlockerRepository(produceFile = { File(context.filesDir, "blockers.json") })
     }
+
+    /** The only [HiddenNotificationRepository] in the app: the "hidden while blocking" list. */
+    val hiddenNotificationRepository: HiddenNotificationRepository by lazy {
+        HiddenNotificationRepository(
+            produceFile = { File(context.filesDir, "hidden_notifications.json") },
+        )
+    }
+
+    /**
+     * For work that has to finish even if the screen or service that started
+     * it has gone, such as saving a hidden notification. It lives as long as
+     * the process does and is never cancelled.
+     */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 }
 
 /**

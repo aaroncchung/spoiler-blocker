@@ -2,6 +2,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
+        Since Android 11 an app can only look up the other apps it has
+        declared a need to see. This entry means "apps that have a launcher
+        icon", which is what the hidden list needs: the name of the app that
+        sent a notification, and a way to open it.
+
+        When a notification is posted, Android lets a listener look up its
+        sender without any declaration. That does not cover a notification
+        that was already showing when the listener connected, nor opening the
+        sender from the hidden list days later. An app without a launcher
+        icon stays unseen in those two cases, and its package name is shown
+        in place of its name.
+
+        The alternative, the QUERY_ALL_PACKAGES permission, would show this
+        app everything that is installed.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!--
         allowBackup is off and the extraction rules exclude everything: the app
         will hold the text of hidden notifications, which must stay on the phone.
     -->
@@ -28,6 +51,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            The notification listener. The permission line means that only
+            Android itself can connect to it, and the intent filter is how
+            Android finds it. Android starts it once the owner has given the
+            app notification access, and restarts it after a reboot.
+
+            exported has to be true, because the caller is the system and not
+            this app.
+
+            A listener may also declare notification types it does not want,
+            with "disabled_filter_types" meta-data. The only type this app has
+            no use for is "ongoing", which a listener cannot dismiss. Tried on
+            Android 16, declaring it greys out a switch in the settings but
+            ongoing notifications arrive all the same, so it is left out.
+        -->
+        <service
+            android:name=".notifications.SpoilerNotificationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
