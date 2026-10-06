@@ -180,7 +180,7 @@ request, **Yes** means the work itself cannot be done without the phone.
 | 4 | 1 | Notification listener, dismissal and the hidden list | Check | ✓ |
 | 5 | 1 | Status notification while a blocker is on | Check | ✓ |
 | 6 | 2 | The real matching rules, with tests | No | ✓ |
-| 7 | 2 | Keyword expansion call, with the API key in untracked local config | No | |
+| 7 | 2 | Keyword expansion call, with the API key in untracked local config | No | ✓ |
 | 8 | 2 | Review screen for the expanded lists | Check | |
 | 9 | 3 | Accessibility service skeleton: watch list, active only while a blocker is on | Check | |
 | 10 | 3 | Opt-in capture and the replay test harness | Check | |
