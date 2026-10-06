@@ -43,7 +43,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `app/…/status/` | `StatusNotifier`, which shows the status notification while a blocker is on, `StatusNotificationContent` (what it says, as plain Kotlin) and the helpers for the permission to post notifications. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
-| `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
+| `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. `TermTableTest` is a table of terms and texts: add a row there when a match surprises you. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
 | `docs/` | Architecture, build plan and, later, Phase 0 findings. |
