@@ -48,8 +48,8 @@ flowchart TD
 
 1. You type a description, for example "2026 Japanese Grand Prix", and choose a
    breadth: **narrow** (this race) or **broad** (all of F1).
-2. The app sends only that description to a cloud LLM. Nothing from the screen
-   is sent.
+2. The app sends that description, the breadth and today's date to a cloud
+   LLM. Nothing from the screen is sent.
 3. The LLM returns three lists:
    - **Strong terms** block a post by themselves: "Japanese Grand Prix",
      "Suzuka", "#JapaneseGP".
@@ -176,7 +176,7 @@ that it is always possible to see why something was or was not blocked.
 | 5 | Each blocker has a breadth: narrow or broad. | Proposed | Lets a race blocker stay tight while a "nothing about this film" blocker goes wide. |
 | 6 | An accessibility service reads the screen and a notification listener handles notifications. | Confirmed | These are the only Android mechanisms that can see other apps' content. |
 | 7 | No model in the live matching path in v1. | Proposed | Keywords and sources are instant, private and explainable. Whether a model would catch more is unknown until v1's misses are measured. |
-| 8 | A cloud LLM is used only when a blocker is created. | Proposed | Expansion needs current world knowledge a small on-device model lacks. Only the typed description leaves the phone. |
+| 8 | A cloud LLM is used only when a blocker is created. | Proposed | Expansion needs current world knowledge a small on-device model lacks. Only the typed description, the breadth and today's date leave the phone. |
 | 9 | Terms are split into strong, weak and sources. | Proposed | Sources catch posts whose text gives nothing away. The weak tier stops common words from over-blocking. |
 | 10 | Only apps on a watch list are read. v1 watches YouTube, then Instagram. | Proposed | The service never sees banking or other apps, and it costs no battery elsewhere. |
 | 11 | Fail closed: cover while scrolling, reveal after checking. | Confirmed as the intent. Exact behaviour needs experiment. | Overlay position updates arrive late, so a box cannot reliably follow a moving post. |
@@ -197,7 +197,7 @@ These are targets to check and revise after Phase 0, not measurements.
 | Blocker on, unwatched app in front | The service receives no events. |
 | Reading and matching one screen | Under 30 ms. |
 | Time from scroll settling to reveal | Under 150 ms. |
-| Network use | One request per blocker created. None while blocking. |
+| Network use | One call per blocker created. It is normally one request, and up to three when the model pauses during a long search. None while blocking. |
 
 ## Not in v1
 
@@ -258,6 +258,10 @@ are the first two to test, on the same labelled examples.
    the notification is posted. The size of the gap is unmeasured.
 6. **Everything depends on the term lists.** A missing driver or character name
    is a miss. The lists are made once, so late developments are not covered.
+   The model is also told not to list a name whose presence would itself be
+   a spoiler, such as a surprise guest. The owner reads the lists before
+   watching, so such a name is left out, and posts that mention only that
+   name are missed.
 7. **This is a first Android project.** Two system services, overlays and
    background limits are among the harder parts of Android. Redeploying during
    development can also switch the accessibility service off.
@@ -277,7 +281,7 @@ These need the owner's answer. The plan assumes the proposal in each case.
 | How long is a typical blocker on: hours or weeks? | Unknown. It decides how much over-blocking and screen covering is tolerable. |
 | Strict covering while scrolling, or cover only matched posts and accept a brief flash? | Strict by default, with a relaxed setting, decided after Phase 0. |
 | What does a tap on a covered post do? | Nothing special in v1: touches pass through so scrolling still works. To see a post, pause the blocker. |
-| Which cloud LLM does keyword expansion? | The Claude API with web search, so lists reflect current facts. One call per blocker. |
+| Which cloud LLM does keyword expansion? | The Claude API with web search, so lists reflect current facts. One call per blocker, to `claude-opus-5-5`. The cost of a call has not been measured; a rough guess is some tens of US cents. |
 | Which Instagram screens are in v1? | The home feed. Reels, Stories and messages are decided after Phase 0. |
 | What licence does the repository use? | None chosen yet. |
 

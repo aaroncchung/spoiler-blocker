@@ -24,3 +24,4 @@ rootProject.name = "spoiler-blocker"
 
 include(":app")
 include(":matcher")
+include(":expansion")

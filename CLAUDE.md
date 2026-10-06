@@ -29,6 +29,8 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `./gradlew build` | Compiles everything, runs unit tests and lint. CI runs exactly this. |
 | `./gradlew :app:testDebugUnitTest` | Unit tests for the app module only. |
 | `./gradlew :matcher:test` | Unit tests for the matcher. Plain JVM, no phone needed. |
+| `./gradlew :expansion:test` | Unit tests for keyword expansion. They use a fake server and never call the real API. |
+| `./gradlew :expansion:run --args="\"2026 Japanese Grand Prix\" narrow"` | Makes one real, billed Claude API call and prints the three lists. Needs a key: the `ANTHROPIC_API_KEY` environment variable, or an `anthropic.apiKey=` line in `local.properties`. |
 | `./gradlew :app:installDebug` | Installs the debug build on a connected phone or emulator. |
 
 ## Layout
@@ -44,6 +46,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. `TermTableTest` is a table of terms and texts: add a row there when a match surprises you. |
+| `expansion/` | Keyword expansion: one Claude API call that turns a description into strong terms, weak terms and sources. Plain Kotlin, no Android. The prompt is in `ExpansionPrompt.kt`; the model and limits are constants at the top of `KeywordExpander.kt`. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
 | `docs/` | Architecture, build plan and, later, Phase 0 findings. |
@@ -72,9 +75,14 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 - When something changes whether blocking works, call
   `AppContainer.statusNotifier.refresh()` on the main thread, so that the
   status notification never says more than is true.
+- The Anthropic API key lives in `local.properties` as `anthropic.apiKey=`.
+  It is never committed, logged or shown.
+- The prompt in `ExpansionPrompt.kt` describes how the matcher works. When
+  the matching rules change, change the prompt in the same pull request.
 - User-visible text goes in `res/values/strings.xml`.
 - Screen text is never stored or sent anywhere in normal use (decision 15).
-  Only the description typed for a blocker ever leaves the phone (decision 8).
+  Only the description typed for a blocker, its breadth and today's date ever
+  leave the phone (decision 8). They go to the Claude API, once per blocker.
   The one thing that is stored is the text of a hidden notification, in the
   hidden list on the phone (decision 13).
 - A notification's title or text is never logged, in any build type. The
