@@ -6,7 +6,10 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.aaroncchung.spoilerblocker.data.BlockerRepository
 import io.github.aaroncchung.spoilerblocker.data.HiddenNotificationRepository
+import io.github.aaroncchung.spoilerblocker.expansion.KeywordExpander
 import io.github.aaroncchung.spoilerblocker.status.StatusNotifier
+import io.github.aaroncchung.spoilerblocker.suggestions.ClaudeTermSuggester
+import io.github.aaroncchung.spoilerblocker.suggestions.TermSuggester
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +60,19 @@ class AppContainer(context: Context) {
 
     /** Shows the status notification while a blocker is on. */
     val statusNotifier = StatusNotifier(context)
+
+    /**
+     * Suggests the lists for a new blocker by asking the Claude API. This is
+     * the only thing in the app that uses the network. The process has one
+     * [KeywordExpander], created here, because each one keeps network
+     * connections of its own.
+     *
+     * The key comes from `local.properties` by way of BuildConfig (see
+     * `app/build.gradle.kts`). It is never logged or shown.
+     */
+    val termSuggester: TermSuggester by lazy {
+        ClaudeTermSuggester(KeywordExpander(apiKey = BuildConfig.ANTHROPIC_API_KEY))
+    }
 
     /**
      * For work that has to finish even if the screen or service that started

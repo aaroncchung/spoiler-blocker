@@ -33,6 +33,21 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
+        The network is used for one thing. When the owner asks for suggested
+        terms for a new blocker, the app makes one call to the Claude API:
+        normally one request, and up to three when the model pauses during a
+        long search. It sends the description that was typed, the breadth and
+        today's date, and nothing else.
+
+        Nothing uses the network while blocking. Nothing read from a
+        notification or from the screen is ever sent anywhere.
+
+        Android gives this permission to any app that declares it, without
+        asking the owner.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
         allowBackup is off and the extraction rules exclude everything: the app
         will hold the text of hidden notifications, which must stay on the phone.
     -->
