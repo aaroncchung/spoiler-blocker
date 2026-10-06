@@ -169,6 +169,18 @@ class NotificationContentTest {
     }
 
     @Test
+    fun `a notification with only parts that are not shown has nothing to show`() {
+        assertTrue(empty.hasNothingToShow)
+        assertTrue(empty.copy(tickerText = "Alex: See you there", infoText = "12").hasNothingToShow)
+
+        assertFalse(empty.copy(title = "Alex").hasNothingToShow)
+        assertFalse(empty.copy(bigTitle = "Alex and Sam").hasNothingToShow)
+        assertFalse(empty.copy(text = "See you there").hasNothingToShow)
+        assertFalse(empty.copy(subText = "Work account").hasNothingToShow)
+        assertFalse(empty.copy(lines = listOf("First line")).hasNothingToShow)
+    }
+
+    @Test
     fun `the hidden list entry says what was hidden, by which blocker and why`() {
         val content = empty.copy(
             title = "Alex",

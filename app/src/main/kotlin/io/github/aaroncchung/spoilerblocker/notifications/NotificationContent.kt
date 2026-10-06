@@ -74,6 +74,10 @@ data class NotificationContent(
                 .joinToString("\n")
         }
 
+    /** True if the hidden list would have neither a title nor a text to show for this. */
+    val hasNothingToShow: Boolean
+        get() = displayTitle.isBlank() && displayText.isBlank()
+
     /**
      * The one place where a notification becomes what the matcher looks at:
      * every part, because a spoiler can be in any of them.

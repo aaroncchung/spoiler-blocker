@@ -157,7 +157,13 @@ class SpoilerNotificationListener : NotificationListenerService() {
         val sincePosted = receivedAt - sbn.postTime
         log(sbn, "arrived $sincePosted ms after it was posted, dismissed ${now - receivedAt} ms later")
 
-        record(content.toHiddenNotification(sbn.key, blockedBy, hiddenAtMillis = now))
+        // When an app has several loose notifications showing, Android puts
+        // them under a summary of its own making, which has no text. It can
+        // still match, through the app's name. It is dismissed like any
+        // other, but there is nothing in it to list: its children are.
+        if (!(sbn.isGroupSummary && content.hasNothingToShow)) {
+            record(content.toHiddenNotification(sbn.key, blockedBy, hiddenAtMillis = now))
+        }
         for (child in children) {
             val childContent = readContent(child)
             // A child that matches by itself is recorded with its own reason.
