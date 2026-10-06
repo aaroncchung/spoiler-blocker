@@ -16,6 +16,25 @@
     <string name="access_card_text">A blocker is on, but Spoiler Blocker is not allowed to see notifications. Allow notification access for it in the system settings.</string>
     <string name="access_card_button">Open settings</string>
 
+    <!-- The status notification. Its channel is what the system settings list for this app. -->
+    <string name="status_channel_name">Blocking status</string>
+    <string name="status_channel_description">Shows while a blocker is on.</string>
+    <plurals name="status_title">
+        <item quantity="one">%1$d blocker is on</item>
+        <item quantity="other">%1$d blockers are on</item>
+    </plurals>
+    <!--
+        The names of the first blockers, then how many more are on: "Cup final, Season finale and 2 more".
+        English uses the same words for one and for several. Other languages do not.
+    -->
+    <plurals name="status_names_and_more">
+        <item quantity="one">%1$s and %2$d more</item>
+        <item quantity="other">%1$s and %2$d more</item>
+    </plurals>
+    <string name="status_no_access_title">Notifications are not being hidden</string>
+    <!-- Only the first line shows until the notification is expanded. %1$s is the names of the blockers that are on. -->
+    <string name="status_no_access_text">Notification access is off. Tap to fix this.\nOn: %1$s</string>
+
     <!-- Hidden list -->
     <string name="hidden_title">Hidden while blocking</string>
     <string name="hidden_back">Back</string>

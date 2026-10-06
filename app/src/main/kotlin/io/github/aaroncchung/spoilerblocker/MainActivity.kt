@@ -37,6 +37,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Notification access and the permission to post notifications are
+        // both changed in the system settings, and the app is not told. When
+        // the owner comes back to the app is the time to look again, so that
+        // the status notification says the right thing.
+        (application as SpoilerBlockerApplication).container.statusNotifier.refresh()
+    }
 }
 
 // Each screen has a route: a small serializable object that names the screen

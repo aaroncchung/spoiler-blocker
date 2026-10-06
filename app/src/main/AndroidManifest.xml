@@ -25,6 +25,13 @@
     </queries>
 
     <!--
+        Needed since Android 13 to post any notification. This app posts one:
+        the status notification that shows while a blocker is on. Declaring
+        the permission only makes it possible to ask the owner for it.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
         allowBackup is off and the extraction rules exclude everything: the app
         will hold the text of hidden notifications, which must stay on the phone.
     -->
@@ -75,6 +82,15 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!--
+            Android runs this when the owner swipes the status notification
+            away. Not exported: no other app may send to it. Android can,
+            because it uses the PendingIntent that this app handed it.
+        -->
+        <receiver
+            android:name=".status.StatusNotificationDismissedReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>
