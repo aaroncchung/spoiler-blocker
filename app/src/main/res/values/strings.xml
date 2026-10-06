@@ -48,9 +48,14 @@
     <string name="hidden_app_and_time">%1$s · %2$s</string>
     <string name="hidden_concealed">Tap to show</string>
     <string name="hidden_by">Hidden by %1$s</string>
-    <!-- The blocker's name, then the term that was found. -->
-    <string name="hidden_reason_term">Hidden by %1$s. It contains “%2$s”.</string>
-    <string name="hidden_reason_group">Hidden by %1$s. It was in a group whose summary contains “%2$s”.</string>
+    <!--
+        The blocker's name, then what was found: one term, one source, or
+        several weak terms with commas between them. That is why it follows a
+        colon and is not put in quotation marks: “Max, podium” in quotation
+        marks would say that those words were found exactly like that.
+    -->
+    <string name="hidden_reason_term">Hidden by %1$s. It contains: %2$s</string>
+    <string name="hidden_reason_group">Hidden by %1$s. It was in a group whose summary contains: %2$s</string>
     <!-- For example "Open Messages". -->
     <string name="hidden_open_app">Open %1$s</string>
     <!-- What a tap on a row does. A screen reader says it after "Double tap to". -->
