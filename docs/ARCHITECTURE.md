@@ -81,6 +81,14 @@ That listing has one gap. Android holds every new notification back for about
 held when its group's summary is dismissed goes with the group, and it cannot
 be listed, because no app was ever told that it existed.
 
+**Status.** While any blocker is on, a silent notification names the blockers
+that are on, so that a forgotten one stays visible. If notifications are not
+actually being hidden, because notification access is off, it says that
+instead. Swiped away, it comes back. Nothing extra keeps it there: Android
+itself keeps the notification listener running and starts it again after the
+phone restarts. Without notification access it only comes back when the app is
+opened.
+
 **Screen.**
 
 1. The app's accessibility service receives events only from the apps you chose
