@@ -33,9 +33,9 @@ data class Blocker(
     // stored by version 1 has none of them and gets the defaults.
 
     /**
-     * What the owner typed to have the lists suggested, or empty if every
-     * term was typed by hand. It is kept so that the lists can be made again
-     * later.
+     * What the owner typed in the first step of creating the blocker: the
+     * text the lists were suggested from, or could be. It is kept so that
+     * the lists can be made again later. Empty if nothing was typed there.
      */
     val description: String = "",
     /** Ambiguous words. How many it takes to block depends on [breadth]. */

@@ -105,6 +105,38 @@
     <string name="editor_delete_title">Delete this blocker?</string>
     <string name="editor_delete_text">This cannot be undone.</string>
     <string name="editor_delete_cancel">Cancel</string>
+    <!-- Asked on Back when a new blocker has terms that were never saved. -->
+    <string name="editor_discard_title">Discard this blocker?</string>
+    <string name="editor_discard_text">It has not been saved. Suggested terms would have to be asked for again.</string>
+    <string name="editor_discard_confirm">Discard</string>
+    <string name="editor_discard_cancel">Keep editing</string>
+
+    <!-- The first step of a new blocker: describing it -->
+    <string name="describe_intro">Say what you do not want spoiled. Claude can suggest the terms to block, and you check them before anything is saved.</string>
+    <string name="describe_field">Description</string>
+    <string name="describe_example">For example: 2026 Japanese Grand Prix</string>
+    <string name="describe_what_is_sent">Suggesting sends this description, the breadth and today\'s date to the Claude API, and nothing else.</string>
+    <string name="describe_suggest">Suggest terms</string>
+    <string name="describe_type_myself">Type them myself</string>
+    <string name="describe_working">Asking Claude for terms. This can take a few minutes, because it searches the web first. Going back cancels the request.</string>
+    <string name="describe_cancel">Cancel</string>
+    <string name="describe_try_again">Try again</string>
+    <!-- Small print under a failure sentence. %1$s is the cause, in English, as the code reports it. -->
+    <string name="describe_failure_detail">Detail: %1$s</string>
+    <!--
+        One sentence for each way that asking for terms can fail. "Try again"
+        is offered with the ones where the same request may work next time.
+    -->
+    <string name="suggest_failed_missing_key">This build of the app has no Anthropic API key, so it cannot ask for terms. Put the line anthropic.apiKey=… in the file local.properties at the top of the repository, then build and install the app again.</string>
+    <string name="suggest_failed_no_network">Could not reach the Claude API. Check the connection, then try again.</string>
+    <string name="suggest_failed_timeout">The Claude API did not answer in time. Try again.</string>
+    <string name="suggest_failed_auth">The Claude API did not accept the API key. Check the line anthropic.apiKey=… in local.properties, then build and install the app again.</string>
+    <string name="suggest_failed_rate_limited">The Claude API is turning requests away for now. Wait a minute, then try again. If it keeps happening, the account may have reached its spending limit.</string>
+    <string name="suggest_failed_server_error">The Claude API is overloaded or failed on its side. Try again in a moment.</string>
+    <string name="suggest_failed_http_other">The Claude API turned the request down. This is usually about the account, such as no credit left. The detail below says more.</string>
+    <string name="suggest_failed_refused">Claude declined to suggest terms for this description. Change the description, or type the terms yourself.</string>
+    <string name="suggest_failed_bad_reply">The answer could not be used: it was cut short, or it was not the three lists. Try again.</string>
+    <string name="suggest_failed_nothing_found">No terms came back for this description. Make it more specific, or type the terms yourself.</string>
 
     <!-- The choice between a narrow and a broad blocker -->
     <string name="breadth_title">Breadth</string>
