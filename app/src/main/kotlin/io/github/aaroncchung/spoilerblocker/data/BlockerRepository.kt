@@ -161,8 +161,11 @@ private object StoredBlockersSerializer : OkioSerializer<StoredBlockers> {
             return json.decodeFromString<StoredBlockers>(text)
         } catch (e: SerializationException) {
             // CorruptionException is what makes DataStore run the corruption
-            // handler above.
-            throw CorruptionException("The blockers file is not valid.", e)
+            // handler above. The exception that was caught is not passed on
+            // as the cause, on purpose: its message quotes the part of the
+            // file it could not read, and this exception can end up in the
+            // log. The unreadable copy is the place to look for the cause.
+            throw CorruptionException("The blockers file is not valid.")
         }
     }
 
