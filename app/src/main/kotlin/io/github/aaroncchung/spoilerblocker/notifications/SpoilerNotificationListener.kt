@@ -4,7 +4,9 @@ import android.app.Notification
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Parcelable
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
+import android.service.notification.NotificationListenerService.RankingMap
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import io.github.aaroncchung.spoilerblocker.AppContainer
@@ -40,13 +42,22 @@ import kotlinx.coroutines.launch
  * notification is judged on its own text, whether it is a child or a summary.
  *
  * - A child that matches is dismissed. The rest of its group stays.
- * - A summary that matches is dismissed together with every child of its
- *   group, and each child gets an entry of its own in the hidden list.
- *   Android leaves no choice about the children: it dismisses them itself
- *   the moment their summary goes. Leaving a matching summary is not an
- *   option either. Its sub text shows in the header of the group, and once
- *   its last child has gone, Android shows the summary as a notification of
- *   its own, with all of its text.
+ * - A summary that matches is dismissed, and every child of its group goes
+ *   with it. Android leaves no choice about the children: it dismisses them
+ *   itself the moment their summary goes. Leaving a matching summary is not
+ *   an option either. Its sub text shows in the header of the group, and
+ *   once its last child has gone, Android shows the summary as a
+ *   notification of its own, with all of its text.
+ * - Each child that goes with a summary gets an entry of its own in the
+ *   hidden list. The children that are showing are listed together with the
+ *   summary. A child that was posted in the instant between listing them
+ *   and dismissing the summary is listed when Android reports that it has
+ *   gone. That report carries a slimmed-down copy of the notification, so
+ *   the entry has its title and text but not the messages of a chat.
+ * - One kind of child cannot be listed. Android holds every new
+ *   notification back for a moment before it shows it to anyone. A child
+ *   that is still being held back when its summary is dismissed goes with
+ *   the group, and no listener is ever told that it existed.
  *
  * **What a listener cannot hide.**
  *
@@ -81,6 +92,8 @@ class SpoilerNotificationListener : NotificationListenerService() {
 
     /** The blockers that are on. Null until the stored blockers have been read for the first time. */
     private var activeBlockers: ActiveBlockers? = null
+
+    private val dismissedGroups = DismissedGroups()
 
     /**
      * App names that were looked up before. Reading a name loads part of the
@@ -168,6 +181,28 @@ class SpoilerNotificationListener : NotificationListenerService() {
             null
         }
 
+    /**
+     * Android calls this for every notification that goes away, whatever the
+     * cause. One cause matters here: a child went because its summary was
+     * dismissed. If this listener dismissed that summary and the child is
+     * not in the hidden list yet, it is listed now. See [DismissedGroups].
+     */
+    override fun onNotificationRemoved(sbn: StatusBarNotification?, rankingMap: RankingMap?, reason: Int) {
+        if (sbn == null || reason != REASON_GROUP_SUMMARY_CANCELED) return
+        guarded(sbn.packageName) {
+            val summaryBlockedBy = dismissedGroups
+                .blockerForUnlistedChild(sbn.groupKey, sbn.key, SystemClock.elapsedRealtime())
+                ?: return
+            val blockers = activeBlockers ?: return
+            // What Android hands over here is a slimmed-down copy of the
+            // notification. Its title, text and lines are there. The
+            // messages of a chat are not.
+            val entry = blockers.entryForGroupChild(shown(sbn), summaryBlockedBy, System.currentTimeMillis())
+            record(listOf(entry))
+            log(sbn, "dismissed with its group, listed afterwards")
+        }
+    }
+
     private fun handle(sbn: StatusBarNotification) {
         // Not read from storage yet. The sweep that follows the first read
         // comes back to this notification.
@@ -176,60 +211,45 @@ class SpoilerNotificationListener : NotificationListenerService() {
         if (blockers.isEmpty || !canBeDismissed(sbn)) return
 
         val receivedAt = System.currentTimeMillis()
-        val content = readContent(sbn)
-        val blockedBy = blockers.check(content.toCandidate())
-        if (blockedBy == null) {
+        val hiding = blockers.decideAbout(shown(sbn), hiddenAtMillis = receivedAt) {
+            // Only run for a summary that matches. The children have to be
+            // listed before the summary is dismissed: afterwards Android may
+            // already have removed them. If listing them fails, the summary
+            // is dismissed all the same.
+            guarded(sbn.packageName) { dismissibleChildrenOf(sbn) }.orEmpty()
+        }
+        if (hiding == null) {
             log(sbn, "left alone")
             return
         }
 
-        // The children have to be listed before the summary is dismissed.
-        // Afterwards Android may already have removed them. If listing them
-        // fails, the summary is dismissed all the same.
-        val children = if (sbn.isGroupSummary) {
-            guarded(sbn.packageName) { dismissibleChildrenOf(sbn) }.orEmpty()
-        } else {
-            emptyList()
-        }
-
-        cancelNotifications((listOf(sbn) + children).map { it.key }.toTypedArray())
-        val now = System.currentTimeMillis()
+        // Only the notification itself. If it is a summary, Android
+        // dismisses its children.
+        cancelNotification(sbn.key)
         // The first number is Android's share of the delay and the second is
         // this app's. The first is not all time on screen: Android may hold
         // a notification back before anything sees it (200 ms on the
         // emulator). In a sweep it is how long the notification had been
         // showing.
         val sincePosted = receivedAt - sbn.postTime
-        log(sbn, "arrived $sincePosted ms after it was posted, dismissed ${now - receivedAt} ms later")
+        val sinceReceived = System.currentTimeMillis() - receivedAt
+        log(sbn, "arrived $sincePosted ms after it was posted, dismissed $sinceReceived ms later")
 
-        // When an app has several loose notifications showing, Android puts
-        // them under a summary of its own making, which has no text. It can
-        // still match, through the app's name. It is dismissed like any
-        // other, but there is nothing in it to list: its children are.
-        if (!(sbn.isGroupSummary && content.hasNothingToShow)) {
-            record(content.toHiddenNotification(sbn.key, blockedBy, hiddenAtMillis = now))
+        if (sbn.isGroupSummary) {
+            dismissedGroups.remember(
+                groupKey = sbn.groupKey,
+                blockedBy = hiding.blockedBy,
+                listedKeys = hiding.entries.map { it.notificationKey },
+                nowMillis = SystemClock.elapsedRealtime(),
+            )
+            log(sbn, "a summary: its group goes with it")
+        } else {
+            // This may be a child that was posted just as its summary was
+            // dismissed. Android will report it as gone with its summary
+            // (see onNotificationRemoved), and it has its entry already.
+            dismissedGroups.markListed(sbn.groupKey, sbn.key)
         }
-        for (child in children) {
-            // Guarded by itself: a child that cannot be read must not keep
-            // the children after it out of the hidden list.
-            guarded(child.packageName) {
-                val childContent = readContent(child)
-                // A child that matches by itself is recorded with its own
-                // reason. In a sweep it is also handled by itself, before or
-                // after its summary. The repository keeps only one of the
-                // two entries.
-                val ownBlockedBy = blockers.check(childContent.toCandidate())
-                record(
-                    childContent.toHiddenNotification(
-                        notificationKey = child.key,
-                        blockedBy = ownBlockedBy ?: blockedBy,
-                        hiddenAtMillis = now,
-                        hiddenWithGroup = ownBlockedBy == null,
-                    ),
-                )
-                log(child, "dismissed with its group")
-            }
-        }
+        record(hiding.entries)
     }
 
     private fun canBeDismissed(sbn: StatusBarNotification): Boolean =
@@ -241,29 +261,45 @@ class SpoilerNotificationListener : NotificationListenerService() {
             // that something was hidden which is still there.
             !sbn.isOngoing
 
-    private fun dismissibleChildrenOf(summary: StatusBarNotification): List<StatusBarNotification> =
-        activeNotifications.orEmpty().filter { sbn ->
-            // The group key holds the user, the package and the group's name,
-            // so it can only be equal within one app.
-            sbn.groupKey == summary.groupKey && !sbn.isGroupSummary && canBeDismissed(sbn)
-        }
+    private fun dismissibleChildrenOf(summary: StatusBarNotification): List<ShownNotification> =
+        activeNotifications.orEmpty()
+            .filter { sbn ->
+                // The group key holds the user, the package and the group's
+                // name, so it can only be equal within one app.
+                sbn.groupKey == summary.groupKey && !sbn.isGroupSummary && canBeDismissed(sbn)
+            }
+            // A child that cannot be read is left out of the list. Android
+            // dismisses it all the same and reports it afterwards, and it
+            // gets its entry then if it can be read at all.
+            .mapNotNull { child -> guarded(child.packageName) { shown(child) } }
 
-    private fun record(entry: HiddenNotification) {
-        // applicationScope and not this service's own scope: the entry must
-        // still be written if Android destroys the service straight after.
+    /** Writes [entries] to the hidden list, in one go and on a background thread. */
+    private fun record(entries: List<HiddenNotification>) {
+        if (entries.isEmpty()) return
+        // applicationScope and not this service's own scope: the entries
+        // must still be written if Android destroys the service straight
+        // after.
         container.applicationScope.launch(storageDispatcher) {
+            // Neither of the two failures may crash the process, because
+            // that would stop the blocking too. The entries are lost. As
+            // everywhere in this class, the log gets the kind of exception
+            // and not its message.
             try {
-                container.hiddenNotificationRepository.add(entry)
+                container.hiddenNotificationRepository.addAll(entries)
             } catch (e: IOException) {
-                // A full disk must not crash the listener, because that would
-                // stop the blocking too. Only IOException is caught: the
-                // "written by a newer build" error is meant to crash, as it
-                // is for the blockers. As everywhere in this class, the log
-                // gets the kind of exception and not its message.
-                Log.w(TAG, "Could not store a hidden notification (${e.javaClass.simpleName})")
+                // The disk: it is full, for example.
+                Log.w(TAG, "Could not store hidden notifications (${e.javaClass.simpleName})")
+            } catch (e: IllegalStateException) {
+                // The file was written by a newer build of the app. The
+                // hidden list screen still fails loudly on such a file,
+                // which is the signal meant for that developer-only case.
+                Log.w(TAG, "Could not store hidden notifications (${e.javaClass.simpleName})")
             }
         }
     }
+
+    private fun shown(sbn: StatusBarNotification) =
+        ShownNotification(sbn.key, readContent(sbn), sbn.isGroupSummary)
 
     /**
      * Copies every piece of text out of [sbn] that could carry a spoiler.

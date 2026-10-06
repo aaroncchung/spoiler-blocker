@@ -68,27 +68,36 @@ class HiddenNotificationRepository(
     val hiddenNotifications: Flow<List<HiddenNotification>> =
         dataStore.data.map { it.notifications }
 
-    /**
-     * Puts [notification] at the top of the list and drops the oldest entries
-     * beyond [MAX_ENTRIES].
-     *
-     * An app may post a notification again without changing it, and it is
-     * dismissed again each time. The list shows it once: if the newest entry
-     * for the same notification has the same title and text, the new entry
-     * takes its place. What stays is the time it was last hidden.
-     */
+    /** Puts [notification] at the top of the list. The rules are those of [addAll]. */
     suspend fun add(notification: HiddenNotification) {
-        dataStore.updateData { stored ->
-            val previous = stored.notifications
-                .firstOrNull { it.notificationKey == notification.notificationKey }
-            val isRepeat = previous != null &&
-                previous.title == notification.title &&
-                previous.text == notification.text
-            val others = if (isRepeat) stored.notifications - previous else stored.notifications
+        addAll(listOf(notification))
+    }
 
+    /**
+     * Adds [notifications] in the order given, so that the last one ends up
+     * at the top of the list. They are written together, in one go: either
+     * all of them are stored or, if the write fails, none.
+     *
+     * Three rules keep the list short and useful:
+     * - An app may post a notification again without changing it, and it is
+     *   dismissed again each time. The list shows it once: if the newest
+     *   entry for the same notification has the same title and text, the new
+     *   entry takes its place. What stays is the time it was last hidden.
+     * - A notification whose text changes all the time, such as a live
+     *   score, keeps only its newest [MAX_ENTRIES_PER_NOTIFICATION] entries.
+     *   Without this it could push every other entry out of the list.
+     * - The list as a whole keeps the newest [MAX_ENTRIES].
+     */
+    suspend fun addAll(notifications: List<HiddenNotification>) {
+        if (notifications.isEmpty()) return
+        dataStore.updateData { stored ->
             stored.copy(
                 version = CURRENT_VERSION,
-                notifications = (listOf(notification) + others).take(MAX_ENTRIES),
+                // fold starts with the stored list and adds one entry after
+                // the other, each time to the result of the step before.
+                notifications = notifications.fold(stored.notifications) { list, notification ->
+                    list.withAdded(notification)
+                },
             )
         }
     }
@@ -108,11 +117,33 @@ class HiddenNotificationRepository(
 
     companion object {
         /**
-         * How many entries are kept. The whole file is rewritten for each new
-         * entry, so the list must not grow without limit.
+         * How many entries are kept. The whole file is rewritten for each
+         * change, so the list must not grow without limit.
          */
         const val MAX_ENTRIES = 500
+
+        /** How many entries are kept for one notification, that is, for one `notificationKey`. */
+        const val MAX_ENTRIES_PER_NOTIFICATION = 5
     }
+}
+
+/** Returns the list, newest first, with [notification] added by the rules of `addAll`. */
+private fun List<HiddenNotification>.withAdded(notification: HiddenNotification): List<HiddenNotification> {
+    val sameNotification = filter { it.notificationKey == notification.notificationKey }
+    val newest = sameNotification.firstOrNull()
+    val isRepeat = newest != null &&
+        newest.title == notification.title &&
+        newest.text == notification.text
+
+    // What has to make way: the entry that the new one repeats, or else the
+    // entries of this notification beyond the newest few. One place of the
+    // few is for the new entry.
+    val replaced = if (isRepeat) {
+        listOf(newest)
+    } else {
+        sameNotification.drop(HiddenNotificationRepository.MAX_ENTRIES_PER_NOTIFICATION - 1)
+    }
+    return (listOf(notification) + (this - replaced.toSet())).take(HiddenNotificationRepository.MAX_ENTRIES)
 }
 
 /**

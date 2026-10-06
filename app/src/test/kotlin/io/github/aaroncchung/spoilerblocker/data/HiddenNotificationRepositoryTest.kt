@@ -256,6 +256,85 @@ class HiddenNotificationRepositoryTest {
     }
 
     @Test
+    fun `several entries added together end up with the last one on top`() = runTest {
+        val repository = HiddenNotificationRepository({ file }, this)
+        repository.add(hidden("1"))
+
+        // A summary and the two children that went with it.
+        repository.addAll(listOf(hidden("summary"), hidden("2"), hidden("3")))
+
+        assertEquals(
+            listOf(hidden("3"), hidden("2"), hidden("summary"), hidden("1")),
+            repository.hiddenNotifications.first(),
+        )
+    }
+
+    @Test
+    fun `adding nothing writes nothing`() = runTest {
+        val repository = HiddenNotificationRepository({ file }, this)
+
+        repository.addAll(emptyList())
+
+        assertFalse(file.exists())
+        assertEquals(emptyList<HiddenNotification>(), repository.hiddenNotifications.first())
+    }
+
+    @Test
+    fun `entries added together follow the same rules as entries added one by one`() = runTest {
+        val repository = HiddenNotificationRepository({ file }, this)
+        val fromAlex = hidden("1", key = "chat with Alex", text = "Did you watch Suzuka?")
+        val fromSam = hidden("2", key = "chat with Sam", text = "Suzuka was wild")
+        repository.add(fromAlex)
+
+        // The first repeats a stored entry, the third repeats the second.
+        val fromAlexAgain = fromAlex.copy(id = "3", hiddenAtMillis = 3_000)
+        val fromSamAgain = fromSam.copy(id = "4", hiddenAtMillis = 4_000)
+        repository.addAll(listOf(fromAlexAgain, fromSam, fromSamAgain))
+
+        assertEquals(listOf(fromSamAgain, fromAlexAgain), repository.hiddenNotifications.first())
+    }
+
+    @Test
+    fun `a notification that keeps changing keeps only its newest entries`() = runTest {
+        val repository = HiddenNotificationRepository({ file }, this)
+        val perNotification = HiddenNotificationRepository.MAX_ENTRIES_PER_NOTIFICATION
+        val fromAlex = hidden("from Alex", key = "chat with Alex")
+        val laps = (1..perNotification + 3).map { lap ->
+            hidden("lap $lap", key = "live timing", text = "Suzuka: lap $lap")
+        }
+
+        repository.add(laps[0])
+        repository.add(fromAlex)
+        for (lap in laps.drop(1)) {
+            repository.add(lap)
+        }
+
+        // The newest few laps, newest first, and below them what Alex wrote.
+        assertEquals(
+            laps.takeLast(perNotification).reversed() + fromAlex,
+            repository.hiddenNotifications.first(),
+        )
+    }
+
+    @Test
+    fun `a notification that keeps changing cannot push the others out of the list`() = runTest {
+        val repository = HiddenNotificationRepository({ file }, this)
+        val fromAlex = hidden("from Alex", key = "chat with Alex")
+        repository.add(fromAlex)
+
+        // More updates than the whole list holds, written in one go.
+        val laps = (1..HiddenNotificationRepository.MAX_ENTRIES + 100).map { lap ->
+            hidden("lap $lap", key = "live timing", text = "Suzuka: lap $lap")
+        }
+        repository.addAll(laps)
+
+        val kept = repository.hiddenNotifications.first()
+        assertEquals(HiddenNotificationRepository.MAX_ENTRIES_PER_NOTIFICATION + 1, kept.size)
+        assertEquals(laps.last(), kept.first())
+        assertEquals(fromAlex, kept.last())
+    }
+
+    @Test
     fun `clear removes every entry`() = runTest {
         val repository = HiddenNotificationRepository({ file }, this)
         repository.add(hidden("1"))
