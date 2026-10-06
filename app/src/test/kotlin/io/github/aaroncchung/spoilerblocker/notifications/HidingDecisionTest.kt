@@ -241,15 +241,31 @@ class HidingDecisionTest {
     }
 
     @Test
-    fun `dismissing the same group again starts afresh`() {
+    fun `a summary that is handed over twice keeps what was listed the first time`() {
+        // Seen on the emulator: Android reported the same summary twice,
+        // three milliseconds apart. The second time its children had gone.
+        val groups = DismissedGroups()
+        groups.remember("chat group", bySuzuka, listedKeys = listOf("summary", "1", "2"), nowMillis = 1_000)
+
+        groups.remember("chat group", bySuzuka, listedKeys = listOf("summary"), nowMillis = 1_003)
+
+        assertNull(groups.blockerForUnlistedChild("chat group", "1", nowMillis = 1_010))
+        assertNull(groups.blockerForUnlistedChild("chat group", "2", nowMillis = 1_010))
+        // One that was never listed still gets its entry.
+        assertEquals(bySuzuka, groups.blockerForUnlistedChild("chat group", "3", nowMillis = 1_010))
+    }
+
+    @Test
+    fun `dismissing a group again much later starts afresh`() {
         val groups = DismissedGroups()
         val byFinale = BlockedBy(finale, Reason.StrongTerm("finale"))
+        val later = 1_001 + DismissedGroups.REMEMBER_MILLIS
         groups.remember("chat group", bySuzuka, listedKeys = listOf("summary", "1"), nowMillis = 1_000)
 
-        groups.remember("chat group", byFinale, listedKeys = listOf("summary"), nowMillis = 2_000)
+        groups.remember("chat group", byFinale, listedKeys = listOf("summary"), nowMillis = later)
 
         // "1" was listed the first time. This is a new notification under the same key.
-        assertEquals(byFinale, groups.blockerForUnlistedChild("chat group", "1", nowMillis = 2_010))
+        assertEquals(byFinale, groups.blockerForUnlistedChild("chat group", "1", nowMillis = later + 10))
     }
 
     @Test

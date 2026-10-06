@@ -108,7 +108,11 @@ class DismissedGroups {
      */
     fun remember(groupKey: String, blockedBy: BlockedBy, listedKeys: Collection<String>, nowMillis: Long) {
         forgetOld(nowMillis)
-        groups[groupKey] = Group(blockedBy, nowMillis, listedKeys.toMutableSet())
+        // Android sometimes hands the same summary over twice in a row. The
+        // second time its children have gone already, so what was listed the
+        // first time must be kept.
+        val listedBefore = groups[groupKey]?.listedKeys.orEmpty()
+        groups[groupKey] = Group(blockedBy, nowMillis, (listedBefore + listedKeys).toMutableSet())
     }
 
     /**
