@@ -18,6 +18,8 @@ The repository is public.
 - Anything real from a phone: screen text, notification text, screenshots,
   `uiautomator` dumps. They contain other people's names and messages. Test
   data in the repository is written by hand.
+- Real labelled examples for the evaluation script. They go in `eval/data/`,
+  which is gitignored.
 
 ## Commands
 
@@ -29,6 +31,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `./gradlew build` | Compiles everything, runs unit tests and lint. CI runs exactly this. |
 | `./gradlew :app:testDebugUnitTest` | Unit tests for the app module only. |
 | `./gradlew :matcher:test` | Unit tests for the matcher. Plain JVM, no phone needed. |
+| `./gradlew -q :eval:run --args="<blocker.json> <examples.jsonl>"` | Runs the matcher over labelled examples and prints the misses and the over-blocks. Try it with the two files in `eval/sample/`. |
 | `./gradlew :expansion:test` | Unit tests for keyword expansion. They use a fake server and never call the real API. |
 | `./gradlew :expansion:run --args="\"2026 Japanese Grand Prix\" narrow"` | Makes one real, billed Claude API call and prints the three lists. Needs a key: the `ANTHROPIC_API_KEY` environment variable, or an `anthropic.apiKey=` line in `local.properties`. |
 | `./gradlew :app:installDebug` | Installs the debug build on a connected phone or emulator. |
@@ -46,6 +49,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. `TermTableTest` is a table of terms and texts: add a row there when a match surprises you. |
+| `eval/` | A command-line script that measures the matcher against labelled examples. See `eval/README.md`. |
 | `expansion/` | Keyword expansion: one Claude API call that turns a description into strong terms, weak terms and sources. Plain Kotlin, no Android. The prompt is in `ExpansionPrompt.kt`; the model and limits are constants at the top of `KeywordExpander.kt`. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
