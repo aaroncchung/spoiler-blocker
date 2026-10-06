@@ -115,12 +115,13 @@ function Get-PrivateFiles {
 }
 
 function Format-OutlineLine {
-    param([int]$Depth, [string]$Class, [string]$Id, [string]$Text, [string]$Desc, [string]$Bounds)
+    param([int]$Depth, [string]$Class, [string]$Id, [string]$Text, [string]$Desc, [string]$Bounds, [string]$Marks = '')
     # Keep only the last part of long names: "android.widget.TextView" -> "TextView".
     $shortClass = ($Class -split '\.')[-1]
     $shortId = ''
     if ($Id) { $shortId = ' #' + ($Id -split '/')[-1] }
     $line = ('{0,2} {1}{2}{3}' -f $Depth, (' ' * $Depth), $shortClass, $shortId)
+    if ($Marks) { $line += $Marks }
     if ($Text) { $line += ' text="' + $Text + '"' }
     if ($Desc) { $line += ' desc="' + $Desc + '"' }
     return "$line $Bounds"
@@ -152,7 +153,9 @@ function Show-XmlOutline {
     Write-Host "($script:shown of $script:total nodes carry text. Columns: depth, class, #view id, text, description, bounds.)"
 }
 
-# Prints the nodes that carry text from one of the probe's own tree dumps.
+# Prints an outline of one of the probe's own tree dumps: the nodes that carry
+# text, and the nodes that say how the screen is grouped (lists, list items,
+# and what a screen reader reads out as one unit).
 function Show-JsonOutline {
     param([string]$Path)
     $total = 0
@@ -160,16 +163,38 @@ function Show-JsonOutline {
     # The file has one node per line. Reading it line by line avoids the size
     # limit of ConvertFrom-Json in Windows PowerShell.
     foreach ($line in [System.IO.File]::ReadLines($Path, [System.Text.Encoding]::UTF8)) {
+        if ($line.StartsWith('{"meta":')) {
+            # The first line: facts about the capture. Take off the wrapper around it.
+            $meta = $line.Substring(8).TrimEnd(',') | ConvertFrom-Json
+            Write-Host ("App {0}, window `"{1}`": {2} nodes, read in {3} ms cold and {4} ms warm." -f `
+                    $meta.package, $meta.windowTitle, $meta.nodeCount, $meta.walkMillis, $meta.walkWarmMillis)
+            if ($meta.truncated) { Write-Warning 'This dump was cut off at the node limit. It is incomplete.' }
+            foreach ($window in $meta.windows) {
+                $wb = $window.bounds
+                Write-Host ("  window {0}: {1} {2} [{3},{4}][{5},{6}]{7}" -f $window.id, $window.type, $window.package, `
+                        $wb[0], $wb[1], $wb[2], $wb[3], $(if ($window.active) { ' (in front)' } else { '' }))
+            }
+            if ($meta.enabledAccessibilityServices) {
+                Write-Host ('  accessibility services on: ' + ($meta.enabledAccessibilityServices -join ', '))
+            }
+            continue
+        }
         if (-not $line.StartsWith('{"i":')) { continue }
         $total++
-        if ($line -notmatch '"(text|desc)":') { continue }
+        if ($line -notmatch '"(text|desc|collection|collectionItem)":|"screenReaderFocusable":true') { continue }
         $node = $line.TrimEnd(',') | ConvertFrom-Json
         $shown++
+        $marks = ''
+        if ($node.collection) { $marks += (' LIST[{0}x{1}]' -f $node.collection.rowCount, $node.collection.columnCount) }
+        if ($node.collectionItem) { $marks += (' ITEM[row {0},col {1}]' -f $node.collectionItem.rowIndex, $node.collectionItem.columnIndex) }
+        if ($node.screenReaderFocusable) { $marks += ' SRF' }
         $b = $node.bounds
         Format-OutlineLine -Depth $node.depth -Class $node.class -Id $node.id -Text $node.text -Desc $node.desc `
-            -Bounds ("[{0},{1}][{2},{3}]" -f $b[0], $b[1], $b[2], $b[3])
+            -Bounds ("[{0},{1}][{2},{3}]" -f $b[0], $b[1], $b[2], $b[3]) -Marks $marks
     }
-    Write-Host "($shown of $total nodes carry text. Columns: depth, class, #view id, text, description, bounds.)"
+    Write-Host "($shown of $total nodes shown. Columns: depth, class, #view id, marks, text, description, bounds.)"
+    Write-Host '(Marks: LIST[rows x columns] = says it is a list; ITEM[row,col] = says it is one item of a list;'
+    Write-Host ' SRF = "screen reader focusable", what a screen reader stops on and reads as one unit.)'
 }
 
 function Show-Outline {
@@ -267,7 +292,7 @@ E2  repick                   move the box to the next item of the list
     tracking events|poll     what makes the box move
     box on|off               show or hide the box
     strip on|off             the film strip (clock, touch and scroll markers)
-    summary [reset]          log the timing summary; "reset" also starts a fresh count
+    summary [reset]          log the timing summary; "reset" also starts a fresh count (do that after each clip)
 E3  touchwatch on|off        the outside-touch watcher
     motionlisten             take the touch screen's events for 10 seconds
 E4  notify [delay-ms]        post the test notification (default: after 3000 ms)
@@ -275,6 +300,7 @@ E4  notify [delay-ms]        post the test notification (default: after 3000 ms)
 E5  screenshot               per-window screenshot, checked for the box
     ratetest                 find the screenshot rate limit (takes 15 seconds)
 E6  runstart [label]         mark the start of a run in the log
+    e6 [lines]               the last E6 lines of the log (default 30); does not disturb a run
 '@
 }
 
@@ -287,6 +313,14 @@ switch ($Command) {
         Invoke-Adb -Arguments @('shell', 'run-as', $Package, 'tail', '-n', "$lines", 'files/probe.log') -Show
     }
     'pull' { Invoke-Pull }
+    'e6' {
+        # Reading the file does not start, wake or "use" the app, so this is
+        # safe during an E6 run. Opening SB Probe is not.
+        $lines = 30
+        if ($Rest.Count -ge 1) { $lines = [int]$Rest[0] }
+        Invoke-Adb -Arguments @('shell', 'run-as', $Package, 'tail', '-n', '5000', 'files/probe.log') -Show |
+            Where-Object { $_ -match ' E6 ' } | Select-Object -Last $lines
+    }
     'dump' { Invoke-Dump -Label ($Rest | Select-Object -First 1) }
     'outline' {
         if ($Rest.Count -lt 1) { throw 'Which file? For example: .\tools\probe.ps1 outline captures\x.uiautomator.xml' }
@@ -306,7 +340,7 @@ switch ($Command) {
     'summary' {
         if ($Rest -contains 'reset') { Send-Probe -Action 'E2_SUMMARY' -Extras @('--ez', 'reset', 'true') } else { Send-Probe -Action 'E2_SUMMARY' }
         Start-Sleep -Milliseconds 500
-        Invoke-Adb -Arguments @('shell', 'run-as', $Package, 'tail', '-n', '12', 'files/probe.log') | Where-Object { $_ -match ' E2 summary ' }
+        Invoke-Adb -Arguments @('shell', 'run-as', $Package, 'tail', '-n', '30', 'files/probe.log') | Where-Object { $_ -match ' E2 summary ' }
     }
     'touchwatch' { Send-Probe -Action 'TOUCH_WATCH' -Extras @('--ez', 'on', (Convert-OnOff ($Rest | Select-Object -First 1))) }
     'motionlisten' { Send-Probe -Action 'MOTION_LISTEN' }
