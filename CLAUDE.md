@@ -40,6 +40,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. |
 | `app/…/blocking/` | `ActiveBlockers`, which decides which enabled blocker blocks something. Plain Kotlin, shared by the notification listener and, later, the screen reader. |
 | `app/…/notifications/` | The notification listener, `NotificationContent` (a notification's text as plain Kotlin), `HidingDecision.kt` (what to dismiss and what to list, as plain Kotlin) and the notification access helpers. |
+| `app/…/status/` | `StatusNotifier`, which shows the status notification while a blocker is on, `StatusNotificationContent` (what it says, as plain Kotlin) and the helpers for the permission to post notifications. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
@@ -68,6 +69,9 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
   the same time.
 - Work that must outlive a screen or a service runs in
   `AppContainer.applicationScope`.
+- When something changes whether blocking works, call
+  `AppContainer.statusNotifier.refresh()` on the main thread, so that the
+  status notification never says more than is true.
 - User-visible text goes in `res/values/strings.xml`.
 - Screen text is never stored or sent anywhere in normal use (decision 15).
   Only the description typed for a blocker ever leaves the phone (decision 8).

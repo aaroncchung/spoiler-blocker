@@ -128,11 +128,20 @@ class SpoilerNotificationListener : NotificationListenerService() {
     /** Android calls this once the service may ask for and dismiss notifications. */
     override fun onListenerConnected() {
         isConnected = true
+        // Notification access may have just been given, and the status
+        // notification says whether the app has it.
+        container.statusNotifier.refresh()
         sweep()
     }
 
+    /**
+     * Android calls this when notification access is taken away. It also
+     * runs as part of onDestroy, which is what `super.onDestroy()` does in
+     * a notification listener.
+     */
     override fun onListenerDisconnected() {
         isConnected = false
+        container.statusNotifier.refresh()
     }
 
     /** Called for a new notification and again each time an app updates one. */
