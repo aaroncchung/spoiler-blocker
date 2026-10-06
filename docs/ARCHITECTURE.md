@@ -65,15 +65,21 @@ is dismissed and added to a "hidden while blocking" list in the app, so you can
 see afterwards that a friend messaged you. The list conceals each entry's text
 until you tap it, because that text is the spoiler.
 
-Two limits come from Android. A notification marked as ongoing, such as a
-media player's, cannot be dismissed by another app, so it is left alone. Text
-that an app draws in its own custom layout cannot be read, so it cannot be
-matched.
+Three limits come from Android. A notification marked as ongoing, such as a
+media player's, cannot be dismissed by another app, so it is left alone. A
+conversation shown as a bubble cannot be hidden: dismissing it only removes its
+entry from the notification shade, and the bubble stays on screen. Text that an
+app draws in its own custom layout cannot be read, so it cannot be matched.
 
 Notifications in a group are each judged on their own text. When a group's
 summary matches, the whole group is dismissed, because the summary would
 otherwise be shown by itself, and each notification that went with it is
 listed.
+
+That listing has one gap. Android holds every new notification back for about
+200 ms before any app is told about it. A notification that is still being
+held when its group's summary is dismissed goes with the group, and it cannot
+be listed, because no app was ever told that it existed.
 
 **Screen.**
 

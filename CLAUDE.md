@@ -39,7 +39,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `app/…/SpoilerBlockerApplication.kt` | The Application and `AppContainer`, which owns the objects shared by the whole app. |
 | `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. |
 | `app/…/blocking/` | `ActiveBlockers`, which decides which enabled blocker blocks something. Plain Kotlin, shared by the notification listener and, later, the screen reader. |
-| `app/…/notifications/` | The notification listener, `NotificationContent` (a notification's text as plain Kotlin) and the notification access helpers. |
+| `app/…/notifications/` | The notification listener, `NotificationContent` (a notification's text as plain Kotlin), `HidingDecision.kt` (what to dismiss and what to list, as plain Kotlin) and the notification access helpers. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
@@ -74,6 +74,8 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
   The one thing that is stored is the text of a hidden notification, in the
   hidden list on the phone (decision 13).
 - A notification's title or text is never logged, in any build type. The
-  listener logs the package and its decision, in debug builds only.
+  listener logs the package and its decision, in debug builds only. An
+  exception is logged by its class name only, because its message can quote
+  what it was reading.
 - Update `docs/ARCHITECTURE.md` when a decision changes status, and this file
   when a module or command is added.
