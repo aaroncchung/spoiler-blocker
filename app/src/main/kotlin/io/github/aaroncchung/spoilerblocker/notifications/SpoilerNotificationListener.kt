@@ -2,6 +2,7 @@ package io.github.aaroncchung.spoilerblocker.notifications
 
 import android.app.Notification
 import android.content.pm.PackageManager
+import android.os.Bundle
 import android.os.Parcelable
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -46,6 +47,24 @@ import kotlinx.coroutines.launch
  *   option either. Its sub text shows in the header of the group, and once
  *   its last child has gone, Android shows the summary as a notification of
  *   its own, with all of its text.
+ *
+ * **What a listener cannot hide.**
+ *
+ * - An ongoing notification, such as music that is playing, a call or a
+ *   download. Android refuses to dismiss it for a listener, so it is left
+ *   alone and not listed.
+ * - A bubble, the floating circle some chat apps show. Dismissing its
+ *   notification only takes the entry out of the notification shade. The
+ *   bubble stays on screen and so does the text beside it, and nothing a
+ *   listener can call removes them. It is still dismissed and listed.
+ *
+ * **When something goes wrong.** A notification is put together by another
+ * app, and it can be malformed in ways that make reading it throw. An
+ * exception that got out of a callback would end the process. Android would
+ * start it again, the sweep would meet the same notification, and so on, with
+ * nothing dismissed in the meantime. So each notification is handled inside a
+ * guard: the one that cannot be handled is left alone, and the others are
+ * not affected.
  */
 class SpoilerNotificationListener : NotificationListenerService() {
 
@@ -104,8 +123,8 @@ class SpoilerNotificationListener : NotificationListenerService() {
     }
 
     /** Called for a new notification and again each time an app updates one. */
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        handle(sbn)
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        if (sbn != null) guarded(sbn.packageName) { handle(sbn) }
     }
 
     /**
@@ -123,10 +142,31 @@ class SpoilerNotificationListener : NotificationListenerService() {
         val blockers = activeBlockers ?: return
         if (blockers.isEmpty) return
 
-        for (sbn in activeNotifications.orEmpty()) {
-            handle(sbn)
+        // The outer guard is for the question to Android itself, which is
+        // refused in the instant after notification access is taken away.
+        guarded("the sweep") {
+            for (sbn in activeNotifications.orEmpty()) {
+                guarded(sbn.packageName) { handle(sbn) }
+            }
         }
     }
+
+    /**
+     * Runs [block] and returns what it returns, or null if it threw. See
+     * "When something goes wrong" in the class comment.
+     *
+     * @param what names what [block] deals with in the log: the package of
+     *   the app whose notification it is, as a rule.
+     */
+    private inline fun <T> guarded(what: String, block: () -> T): T? =
+        try {
+            block()
+        } catch (e: RuntimeException) {
+            // The kind of exception and never its message: a message can
+            // quote the notification that caused it.
+            Log.w(TAG, "$what: could not be handled (${e.javaClass.simpleName})")
+            null
+        }
 
     private fun handle(sbn: StatusBarNotification) {
         // Not read from storage yet. The sweep that follows the first read
@@ -144,8 +184,13 @@ class SpoilerNotificationListener : NotificationListenerService() {
         }
 
         // The children have to be listed before the summary is dismissed.
-        // Afterwards Android may already have removed them.
-        val children = if (sbn.isGroupSummary) dismissibleChildrenOf(sbn) else emptyList()
+        // Afterwards Android may already have removed them. If listing them
+        // fails, the summary is dismissed all the same.
+        val children = if (sbn.isGroupSummary) {
+            guarded(sbn.packageName) { dismissibleChildrenOf(sbn) }.orEmpty()
+        } else {
+            emptyList()
+        }
 
         cancelNotifications((listOf(sbn) + children).map { it.key }.toTypedArray())
         val now = System.currentTimeMillis()
@@ -165,20 +210,25 @@ class SpoilerNotificationListener : NotificationListenerService() {
             record(content.toHiddenNotification(sbn.key, blockedBy, hiddenAtMillis = now))
         }
         for (child in children) {
-            val childContent = readContent(child)
-            // A child that matches by itself is recorded with its own reason.
-            // In a sweep it is also handled by itself, before or after its
-            // summary. The repository keeps only one of the two entries.
-            val ownBlockedBy = blockers.check(childContent.toCandidate())
-            record(
-                childContent.toHiddenNotification(
-                    notificationKey = child.key,
-                    blockedBy = ownBlockedBy ?: blockedBy,
-                    hiddenAtMillis = now,
-                    hiddenWithGroup = ownBlockedBy == null,
-                ),
-            )
-            log(child, "dismissed with its group")
+            // Guarded by itself: a child that cannot be read must not keep
+            // the children after it out of the hidden list.
+            guarded(child.packageName) {
+                val childContent = readContent(child)
+                // A child that matches by itself is recorded with its own
+                // reason. In a sweep it is also handled by itself, before or
+                // after its summary. The repository keeps only one of the
+                // two entries.
+                val ownBlockedBy = blockers.check(childContent.toCandidate())
+                record(
+                    childContent.toHiddenNotification(
+                        notificationKey = child.key,
+                        blockedBy = ownBlockedBy ?: blockedBy,
+                        hiddenAtMillis = now,
+                        hiddenWithGroup = ownBlockedBy == null,
+                    ),
+                )
+                log(child, "dismissed with its group")
+            }
         }
     }
 
@@ -206,39 +256,35 @@ class SpoilerNotificationListener : NotificationListenerService() {
                 container.hiddenNotificationRepository.add(entry)
             } catch (e: IOException) {
                 // A full disk must not crash the listener, because that would
-                // stop the blocking too. The exception names the file, never
-                // the notification. Only IOException is caught: the "written
-                // by a newer build" error is meant to crash, as it is for the
-                // blockers.
-                Log.w(TAG, "Could not store a hidden notification", e)
+                // stop the blocking too. Only IOException is caught: the
+                // "written by a newer build" error is meant to crash, as it
+                // is for the blockers. As everywhere in this class, the log
+                // gets the kind of exception and not its message.
+                Log.w(TAG, "Could not store a hidden notification (${e.javaClass.simpleName})")
             }
         }
     }
 
-    /** Copies every piece of text out of [sbn] that could carry a spoiler. */
+    /**
+     * Copies every piece of text out of [sbn] that could carry a spoiler.
+     *
+     * Each part is read by itself, through `readPart`. A part that is not
+     * there, or that cannot be read, is left empty, and the rest is still
+     * read and matched.
+     */
     private fun readContent(sbn: StatusBarNotification): NotificationContent {
+        val notification = sbn.notification
         // An app describes its notification in "extras": a bag of values
         // under keys that the Notification class names.
-        val extras = sbn.notification.extras
+        val extras: Bundle? = notification.extras
 
         // Text is stored as a CharSequence because it may carry styling.
-        // toString() drops the styling.
-        fun text(key: String): String = extras.getCharSequence(key)?.toString().orEmpty()
-
-        val messages = Notification.MessagingStyle.Message
-            .getMessagesFromBundleArray(
-                extras.getParcelableArray(Notification.EXTRA_MESSAGES, Parcelable::class.java),
-            )
-            .map { message ->
-                NotificationContent.Message(
-                    sender = message.senderPerson?.name?.toString().orEmpty(),
-                    text = message.text?.toString().orEmpty(),
-                )
-            }
+        // textOf drops the styling.
+        fun text(key: String): String = readPart("") { textOf(extras?.getCharSequence(key)) }
 
         return NotificationContent(
             packageName = sbn.packageName,
-            appName = appNameOf(sbn.packageName),
+            appName = readPart(sbn.packageName) { appNameOf(sbn.packageName) },
             title = text(Notification.EXTRA_TITLE),
             bigTitle = text(Notification.EXTRA_TITLE_BIG),
             text = text(Notification.EXTRA_TEXT),
@@ -247,10 +293,22 @@ class SpoilerNotificationListener : NotificationListenerService() {
             summaryText = text(Notification.EXTRA_SUMMARY_TEXT),
             infoText = text(Notification.EXTRA_INFO_TEXT),
             conversationTitle = text(Notification.EXTRA_CONVERSATION_TITLE),
-            lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).orEmpty()
-                .map { line -> line.toString() },
-            messages = messages,
-            tickerText = sbn.notification.tickerText?.toString().orEmpty(),
+            lines = readPart(emptyList()) {
+                textsOf(extras?.getCharSequenceArray(Notification.EXTRA_TEXT_LINES))
+            },
+            messages = readPart(emptyList()) {
+                Notification.MessagingStyle.Message
+                    .getMessagesFromBundleArray(
+                        extras?.getParcelableArray(Notification.EXTRA_MESSAGES, Parcelable::class.java),
+                    )
+                    .map { message ->
+                        NotificationContent.Message(
+                            sender = textOf(message.senderPerson?.name),
+                            text = textOf(message.text),
+                        )
+                    }
+            },
+            tickerText = textOf(notification.tickerText),
             pictureDescription = text(Notification.EXTRA_PICTURE_CONTENT_DESCRIPTION),
         )
     }

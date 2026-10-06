@@ -1,5 +1,6 @@
 package io.github.aaroncchung.spoilerblocker.ui.hidden
 
+import android.content.ActivityNotFoundException
 import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -237,7 +238,17 @@ private fun OpenAppButton(notification: HiddenNotification, modifier: Modifier =
         context.packageManager.getLaunchIntentForPackage(notification.packageName)
     }
     if (launchIntent != null) {
-        TextButton(onClick = { context.startActivity(launchIntent) }, modifier = modifier) {
+        TextButton(
+            onClick = {
+                try {
+                    context.startActivity(launchIntent)
+                } catch (e: ActivityNotFoundException) {
+                    // The app was uninstalled after this row was drawn, so
+                    // there is nothing left to open.
+                }
+            },
+            modifier = modifier,
+        ) {
             Text(stringResource(R.string.hidden_open_app, notification.appName))
         }
     }

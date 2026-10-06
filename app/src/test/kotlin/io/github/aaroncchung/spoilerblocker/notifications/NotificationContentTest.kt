@@ -169,6 +169,39 @@ class NotificationContentTest {
     }
 
     @Test
+    fun `a text that is missing is empty`() {
+        assertEquals("", textOf(null))
+        assertEquals("Alex", textOf("Alex"))
+        // Android often hands text over as something other than a String.
+        assertEquals("Alex", textOf(StringBuilder("Alex")))
+    }
+
+    @Test
+    fun `a null in a list of texts is left out`() {
+        // What Notification.InboxStyle().addLine(null) leaves in the array.
+        val lines: Array<CharSequence?> = arrayOf("First line", null, "Second line")
+
+        assertEquals(listOf("First line", "Second line"), textsOf(lines))
+        assertEquals(emptyList<String>(), textsOf(arrayOf<CharSequence?>(null)))
+        assertEquals(emptyList<String>(), textsOf(null))
+    }
+
+    @Test
+    fun `a part that cannot be read is empty and the other parts are still read`() {
+        val content = NotificationContent(
+            packageName = "com.example.chat",
+            appName = "Chat",
+            title = readPart("") { "Alex" },
+            text = readPart("") { throw IllegalStateException("This part is broken.") },
+            lines = readPart(emptyList()) { throw NullPointerException() },
+            bigText = readPart("") { "Rain at Suzuka" },
+        )
+
+        assertEquals(empty.copy(title = "Alex", bigText = "Rain at Suzuka"), content)
+        assertNotNull(ActiveBlockers(listOf(race)).check(content.toCandidate()))
+    }
+
+    @Test
     fun `a notification with only parts that are not shown has nothing to show`() {
         assertTrue(empty.hasNothingToShow)
         assertTrue(empty.copy(tickerText = "Alex: See you there", infoText = "12").hasNothingToShow)

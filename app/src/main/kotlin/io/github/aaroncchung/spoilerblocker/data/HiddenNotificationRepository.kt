@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -33,7 +34,7 @@ import okio.Path.Companion.toOkioPath
  * @param scope where the file reads and writes run. Tests pass their own.
  */
 class HiddenNotificationRepository(
-    produceFile: () -> File,
+    private val produceFile: () -> File,
     scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) {
     private val dataStore: DataStore<StoredHiddenNotifications> = DataStoreFactory.create(
@@ -44,15 +45,17 @@ class HiddenNotificationRepository(
         // hidden_notifications.json.unreadable, and the list starts again
         // empty.
         corruptionHandler = ReplaceFileCorruptionHandler {
-            val unreadable = produceFile()
-            unreadable.copyTo(
-                File(unreadable.parentFile, unreadable.name + ".unreadable"),
-                overwrite = true,
-            )
+            produceFile().copyTo(unreadableCopy(), overwrite = true)
             StoredHiddenNotifications()
         },
         scope = scope,
     )
+
+    /** Where a file that could not be read is kept. */
+    private fun unreadableCopy(): File {
+        val file = produceFile()
+        return File(file.parentFile, file.name + ".unreadable")
+    }
 
     /**
      * The hidden notifications, newest first. Collecting this gives the
@@ -90,11 +93,17 @@ class HiddenNotificationRepository(
         }
     }
 
-    /** Removes every entry. */
+    /**
+     * Removes every entry, and the copy of a file that could not be read if
+     * there is one: it holds the text of notifications too.
+     */
     suspend fun clear() {
         dataStore.updateData { stored ->
             stored.copy(version = CURRENT_VERSION, notifications = emptyList())
         }
+        // DataStore does its own file work on a background thread. This
+        // delete is not DataStore's, so it has to be sent there by hand.
+        withContext(Dispatchers.IO) { unreadableCopy().delete() }
     }
 
     companion object {
@@ -146,7 +155,11 @@ private object StoredHiddenNotificationsSerializer : OkioSerializer<StoredHidden
             }
             return json.decodeFromString<StoredHiddenNotifications>(text)
         } catch (e: SerializationException) {
-            throw CorruptionException("The hidden notifications file is not valid.", e)
+            // The exception that was caught is not passed on as the cause,
+            // on purpose. Its message quotes the part of the file it could
+            // not read, which here is the text of a notification, and this
+            // exception can end up in the log.
+            throw CorruptionException("The hidden notifications file is not valid.")
         }
     }
 

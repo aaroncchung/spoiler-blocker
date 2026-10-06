@@ -137,6 +137,32 @@ data class NotificationContent(
     )
 }
 
+// The three functions below are for the code that fills a NotificationContent
+// from Android's objects. A notification is put together by another app, and
+// nothing guarantees that a part of it is there, or is what it should be.
+
+/** Android hands text over as a CharSequence, which may be missing. */
+internal fun textOf(value: CharSequence?): String = value?.toString().orEmpty()
+
+/**
+ * The texts in an array from a notification. The array may be missing, and so
+ * may any element of it: an app that adds a null line to its list of lines
+ * gets a null in the array.
+ */
+internal fun textsOf(values: Array<out CharSequence?>?): List<String> =
+    values.orEmpty().mapNotNull { value -> value?.toString() }
+
+/**
+ * Reads one part of a notification. If [read] fails, whatever the reason, the
+ * part counts as [missing]. The other parts are still read and matched.
+ */
+internal inline fun <T> readPart(missing: T, read: () -> T): T =
+    try {
+        read()
+    } catch (e: RuntimeException) {
+        missing
+    }
+
 /**
  * The term to show for a [Reason] in the hidden list.
  *

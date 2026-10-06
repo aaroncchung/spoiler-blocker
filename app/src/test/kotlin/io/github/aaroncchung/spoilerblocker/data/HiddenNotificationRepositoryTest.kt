@@ -1,6 +1,7 @@
 package io.github.aaroncchung.spoilerblocker.data
 
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -356,5 +357,57 @@ class HiddenNotificationRepositoryTest {
         // The repository still works afterwards.
         repository.add(hidden("1"))
         assertEquals(listOf(hidden("1")), repository.hiddenNotifications.first())
+    }
+
+    @Test
+    fun `clear removes the copy of an unreadable file as well`() = runTest {
+        // The copy holds the text of notifications, like the list itself.
+        file.writeText("""{"version":1,"notifications":[{"id":"1","title":"Did you watch Suz""")
+        val repository = HiddenNotificationRepository({ file }, this)
+        repository.hiddenNotifications.first()
+        assertTrue(unreadableCopy.exists())
+
+        repository.clear()
+
+        assertFalse(unreadableCopy.exists())
+        assertEquals(emptyList<HiddenNotification>(), repository.hiddenNotifications.first())
+    }
+
+    @Test
+    fun `clear works when there is no copy of an unreadable file`() = runTest {
+        val repository = HiddenNotificationRepository({ file }, this)
+        repository.add(hidden("1"))
+
+        repository.clear()
+
+        assertEquals(emptyList<HiddenNotification>(), repository.hiddenNotifications.first())
+    }
+
+    // When a file cannot be read and the empty list that should replace it
+    // cannot be written either, the failure reaches whoever asked: the
+    // listener, which logs it, or a screen, which crashes with it. Either
+    // way it ends up in the log, so it must not carry what the file holds.
+    @Test
+    fun `the failure for an unreadable file does not quote the file`() = runTest {
+        val secret = "Did you watch Suzuka"
+        file.writeText("""{"version":1,"notifications":[{"id":"1","title":"$secret""")
+        // DataStore writes a new file under this name and then renames it.
+        // A folder in its place, and not an empty one, makes that fail.
+        val temporaryName = File(temporaryFolder.root, "hidden_notifications.json.tmp")
+        temporaryName.mkdir()
+        File(temporaryName, "in the way").writeText("")
+        val repository = HiddenNotificationRepository({ file }, this)
+
+        val failure = try {
+            repository.hiddenNotifications.first()
+            null
+        } catch (e: IOException) {
+            e
+        }
+
+        assertTrue("Reading should have failed.", failure != null)
+        // stackTraceToString is what a crash puts in the log: the message,
+        // the causes and the suppressed exceptions.
+        assertFalse(failure!!.stackTraceToString().contains("Suzuka"))
     }
 }
