@@ -3,8 +3,11 @@ package io.github.aaroncchung.spoilerblocker.notifications
 import io.github.aaroncchung.spoilerblocker.blocking.ActiveBlockers
 import io.github.aaroncchung.spoilerblocker.blocking.BlockedBy
 import io.github.aaroncchung.spoilerblocker.data.Blocker
+import io.github.aaroncchung.spoilerblocker.matcher.BlockerTerms
 import io.github.aaroncchung.spoilerblocker.matcher.Candidate
+import io.github.aaroncchung.spoilerblocker.matcher.Matcher
 import io.github.aaroncchung.spoilerblocker.matcher.Reason
+import io.github.aaroncchung.spoilerblocker.matcher.Verdict
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -52,7 +55,7 @@ class NotificationContentTest {
 
         assertEquals(
             Candidate(
-                listOf(
+                texts = listOf(
                     "Chat",
                     "Alex",
                     "Alex and Sam",
@@ -73,6 +76,7 @@ class NotificationContentTest {
                     "Mark as read",
                     "New message",
                 ),
+                sources = listOf("Chat", "Alex", "Alex and Sam", "Work account", "Race weekend", "Sam"),
             ),
             content.toCandidate(),
         )
@@ -80,7 +84,7 @@ class NotificationContentTest {
 
     @Test
     fun `the package name is not part of the candidate`() {
-        assertEquals(Candidate(listOf("Chat")), empty.toCandidate())
+        assertEquals(Candidate(texts = listOf("Chat"), sources = listOf("Chat")), empty.toCandidate())
     }
 
     @Test
@@ -94,7 +98,10 @@ class NotificationContentTest {
             tickerText = "See you there",
         )
 
-        assertEquals(Candidate(listOf("Chat", "Alex", "See you there")), content.toCandidate())
+        assertEquals(
+            Candidate(texts = listOf("Chat", "Alex", "See you there"), sources = listOf("Chat", "Alex")),
+            content.toCandidate(),
+        )
     }
 
     @Test
@@ -207,6 +214,42 @@ class NotificationContentTest {
 
         assertEquals(empty.copy(title = "Alex", bigText = "Rain at Suzuka"), content)
         assertNotNull(ActiveBlockers(listOf(race)).check(content.toCandidate()))
+    }
+
+    @Test
+    fun `a blocker's source is found in the app, the title or a sender, and not in the text`() {
+        val fromTheChannel = Matcher(BlockerTerms(strong = emptyList(), sources = listOf("FORMULA 1")))
+
+        val byApp = NotificationContent(packageName = "com.example.f1", appName = "Formula 1", text = "New video")
+        val byTitle = empty.copy(title = "FORMULA 1", text = "What a finish!")
+        val bySender = empty.copy(
+            title = "Race weekend",
+            messages = listOf(NotificationContent.Message(sender = "Formula 1", text = "What a finish!")),
+        )
+        for (content in listOf(byApp, byTitle, bySender)) {
+            assertEquals(
+                "Not blocked: $content",
+                Verdict.Blocked(Reason.Source("FORMULA 1")),
+                fromTheChannel.check(content.toCandidate()),
+            )
+        }
+
+        val onlyInTheText = empty.copy(title = "Alex", text = "Did you watch Formula 1 today?")
+        assertEquals(Verdict.Allowed, fromTheChannel.check(onlyInTheText.toCandidate()))
+    }
+
+    @Test
+    fun `every kind of reason has something to show in the hidden list`() {
+        fun shownFor(reason: Reason): String = empty.copy(title = "Alex").toHiddenNotification(
+            notificationKey = "0|com.example.chat|7|null|10001",
+            blockedBy = BlockedBy(race, reason),
+            hiddenAtMillis = 5_000,
+        ).matchedTerm
+
+        assertEquals("FORMULA 1", shownFor(Reason.Source("FORMULA 1")))
+        assertEquals("Suzuka", shownFor(Reason.StrongTerm("Suzuka")))
+        assertEquals("Max, podium", shownFor(Reason.WeakTerms(listOf("Max", "podium"))))
+        assertEquals("Max", shownFor(Reason.WeakTermBroad("Max")))
     }
 
     @Test
