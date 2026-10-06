@@ -20,6 +20,18 @@ kotlin {
     }
 }
 
+// Tries the expansion from a terminal. It runs only when asked for by name:
+// ./gradlew :expansion:run --args="\"2026 Japanese Grand Prix\" narrow"
+tasks.register<JavaExec>("run") {
+    group = "application"
+    description = "Makes one real Claude API call and prints the three lists. See Main.kt."
+    // Kotlin compiles the top-level main() in Main.kt into a class named MainKt.
+    mainClass = "io.github.aaroncchung.spoilerblocker.expansion.MainKt"
+    classpath = sourceSets.main.get().runtimeClasspath
+    // Start in the repository root, where Main.kt looks for local.properties.
+    workingDir = rootDir
+}
+
 dependencies {
     // "api" rather than "implementation" because OkHttpClient appears in
     // KeywordExpander's constructor, so the app needs to see the type too.
