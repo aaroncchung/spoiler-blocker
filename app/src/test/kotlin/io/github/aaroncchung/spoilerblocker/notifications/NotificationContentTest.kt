@@ -47,6 +47,7 @@ class NotificationContentTest {
             ),
             tickerText = "Alex: See you there",
             pictureDescription = "A car park",
+            otherTexts = listOf("Reply", "Mark as read", "New message"),
         )
 
         assertEquals(
@@ -68,6 +69,9 @@ class NotificationContentTest {
                     "I am",
                     "Alex: See you there",
                     "A car park",
+                    "Reply",
+                    "Mark as read",
+                    "New message",
                 ),
             ),
             content.toCandidate(),
@@ -112,6 +116,8 @@ class NotificationContentTest {
             empty.copy(messages = listOf(NotificationContent.Message(sender = "Sam", text = spoiler))),
             empty.copy(tickerText = spoiler),
             empty.copy(pictureDescription = spoiler),
+            // For example a button, or the text for a locked screen.
+            empty.copy(otherTexts = listOf("Reply", spoiler)),
         )
 
         for (content in everyPart) {
@@ -157,6 +163,8 @@ class NotificationContentTest {
             infoText = "12",
             tickerText = "Alex: See you there",
             pictureDescription = "A car park",
+            // Matched only: buttons, the text for a locked screen and so on.
+            otherTexts = listOf("Reply", "New message"),
         )
 
         assertEquals("See you there\nWork account\n2 new messages", content.displayText)
@@ -205,6 +213,7 @@ class NotificationContentTest {
     fun `a notification with only parts that are not shown has nothing to show`() {
         assertTrue(empty.hasNothingToShow)
         assertTrue(empty.copy(tickerText = "Alex: See you there", infoText = "12").hasNothingToShow)
+        assertTrue(empty.copy(otherTexts = listOf("Reply", "New message")).hasNothingToShow)
 
         assertFalse(empty.copy(title = "Alex").hasNothingToShow)
         assertFalse(empty.copy(bigTitle = "Alex and Sam").hasNothingToShow)

@@ -316,7 +316,44 @@ class SpoilerNotificationListener : NotificationListenerService() {
 
         // Text is stored as a CharSequence because it may carry styling.
         // textOf drops the styling.
-        fun text(key: String): String = readPart("") { textOf(extras?.getCharSequence(key)) }
+        fun text(key: String, from: Bundle? = extras): String =
+            readPart("") { textOf(from?.getCharSequence(key)) }
+
+        fun texts(key: String): List<String> =
+            readPart(emptyList()) { textsOf(extras?.getCharSequenceArray(key)) }
+
+        fun messages(key: String): List<NotificationContent.Message> =
+            readPart(emptyList()) {
+                Notification.MessagingStyle.Message
+                    .getMessagesFromBundleArray(extras?.getParcelableArray(key, Parcelable::class.java))
+                    .map { message ->
+                        NotificationContent.Message(
+                            sender = textOf(message.senderPerson?.name),
+                            text = textOf(message.text),
+                        )
+                    }
+            }
+
+        val otherTexts = buildList {
+            // The labels of the buttons.
+            addAll(
+                readPart(emptyList()) {
+                    notification.actions.orEmpty().mapNotNull { action -> action?.title?.toString() }
+                },
+            )
+            // What an app gives for a locked screen that hides the content.
+            val publicExtras: Bundle? = readPart(null) { notification.publicVersion?.extras }
+            add(text(Notification.EXTRA_TITLE, from = publicExtras))
+            add(text(Notification.EXTRA_TEXT, from = publicExtras))
+            // Earlier messages of a chat.
+            for (message in messages(Notification.EXTRA_HISTORIC_MESSAGES)) {
+                add(message.sender)
+                add(message.text)
+            }
+            // What the owner typed into the notification's reply field.
+            addAll(texts(Notification.EXTRA_REMOTE_INPUT_HISTORY))
+            add(text(EXTRA_SUBSTITUTE_APP_NAME))
+        }
 
         return NotificationContent(
             packageName = sbn.packageName,
@@ -329,23 +366,11 @@ class SpoilerNotificationListener : NotificationListenerService() {
             summaryText = text(Notification.EXTRA_SUMMARY_TEXT),
             infoText = text(Notification.EXTRA_INFO_TEXT),
             conversationTitle = text(Notification.EXTRA_CONVERSATION_TITLE),
-            lines = readPart(emptyList()) {
-                textsOf(extras?.getCharSequenceArray(Notification.EXTRA_TEXT_LINES))
-            },
-            messages = readPart(emptyList()) {
-                Notification.MessagingStyle.Message
-                    .getMessagesFromBundleArray(
-                        extras?.getParcelableArray(Notification.EXTRA_MESSAGES, Parcelable::class.java),
-                    )
-                    .map { message ->
-                        NotificationContent.Message(
-                            sender = textOf(message.senderPerson?.name),
-                            text = textOf(message.text),
-                        )
-                    }
-            },
+            lines = texts(Notification.EXTRA_TEXT_LINES),
+            messages = messages(Notification.EXTRA_MESSAGES),
             tickerText = textOf(notification.tickerText),
             pictureDescription = text(Notification.EXTRA_PICTURE_CONTENT_DESCRIPTION),
+            otherTexts = otherTexts,
         )
     }
 
@@ -386,3 +411,10 @@ class SpoilerNotificationListener : NotificationListenerService() {
 
 private val StatusBarNotification.isGroupSummary: Boolean
     get() = notification.flags and Notification.FLAG_GROUP_SUMMARY != 0
+
+/**
+ * The key under which a system app can give a name to show in place of its
+ * own. Android keeps `Notification.EXTRA_SUBSTITUTE_APP_NAME` to itself, so
+ * its value is repeated here.
+ */
+private const val EXTRA_SUBSTITUTE_APP_NAME = "android.substName"

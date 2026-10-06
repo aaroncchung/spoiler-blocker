@@ -40,6 +40,17 @@ data class NotificationContent(
     val tickerText: String = "",
     /** What an app says its picture shows, for screen readers. */
     val pictureDescription: String = "",
+    /**
+     * Everything else in a notification that can end up on screen. It is
+     * matched and never shown in the hidden list:
+     * - the labels of the notification's buttons;
+     * - the title and text an app gives for a locked screen that hides the
+     *   real ones;
+     * - earlier messages of a chat, which an app may attach for context;
+     * - what the owner typed into the notification's reply field;
+     * - a name that a system app shows in place of its own.
+     */
+    val otherTexts: List<String> = emptyList(),
 ) {
     /** One message in a chat notification. [sender] is empty for the owner's own replies. */
     data class Message(val sender: String, val text: String)
@@ -54,9 +65,9 @@ data class NotificationContent(
      * the small print around it.
      *
      * The parts that Android itself no longer shows anywhere are left out
-     * ([infoText], [tickerText], [pictureDescription]). They are still
-     * matched, so now and then an entry is hidden for a term that its text
-     * does not show.
+     * ([infoText], [tickerText], [pictureDescription]), and so are the
+     * [otherTexts]. They are still matched, so now and then an entry is
+     * hidden for a term that its text does not show.
      */
     val displayText: String
         get() {
@@ -103,6 +114,7 @@ data class NotificationContent(
             }
             add(tickerText)
             add(pictureDescription)
+            addAll(otherTexts)
         }
         // The same words are often in several parts: the text is usually
         // also the start of the big text and the newest message.
