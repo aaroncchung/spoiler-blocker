@@ -73,14 +73,38 @@
     <string name="editor_name">Name</string>
     <!-- Not "On": a screen reader says the state first, and "Off, On, switch" makes no sense. -->
     <string name="editor_enabled">Blocking</string>
-    <string name="editor_terms_title">Terms</string>
+    <string name="editor_terms_empty">No terms or sources yet, so this blocker hides nothing.</string>
+    <!--
+        The three lists. Each title ends with how many entries the list has.
+        The line under it says what the list does. "Matching rules" in
+        docs/ARCHITECTURE.md is where those rules are written down.
+    -->
+    <string name="editor_strong_title">Strong terms (%1$d)</string>
+    <string name="editor_strong_helper">Any one of these is enough to hide something.</string>
+    <string name="editor_weak_title">Weak terms (%1$d)</string>
+    <string name="editor_weak_helper_narrow">Words that often mean something else. It takes two different ones together to hide something.</string>
+    <string name="editor_weak_helper_broad">Words that often mean something else. One is enough to hide something, because the breadth is broad.</string>
+    <string name="editor_sources_title">Sources (%1$d)</string>
+    <string name="editor_sources_helper">Channel, account and app names. Anything that comes from one of them is hidden.</string>
     <string name="editor_term_field">Word or phrase</string>
+    <string name="editor_source_field">Channel, account or app</string>
     <string name="editor_term_add">Add</string>
-    <string name="editor_terms_helper">Anything containing one of these words or phrases is hidden.</string>
-    <string name="editor_terms_empty">No terms yet, so this blocker hides nothing.</string>
-    <!-- Read out by a screen reader for the chip of one term, for example "Remove Suzuka". -->
-    <string name="editor_term_remove">Remove %1$s</string>
+    <string name="editor_term_refused">Not added: it has no letter or digit, so it could never be found.</string>
+    <!-- The menu that a tap on a term opens. -->
+    <string name="editor_term_to_weak">Move to weak terms</string>
+    <string name="editor_term_to_strong">Move to strong terms</string>
+    <string name="editor_term_remove">Remove</string>
+    <!-- Under a long list, which shows only its first entries. %1$d is how many it has. -->
+    <string name="editor_terms_show_all">Show all %1$d</string>
+    <string name="editor_terms_show_fewer">Show fewer</string>
     <string name="editor_delete_title">Delete this blocker?</string>
     <string name="editor_delete_text">This cannot be undone.</string>
     <string name="editor_delete_cancel">Cancel</string>
+
+    <!-- The choice between a narrow and a broad blocker -->
+    <string name="breadth_title">Breadth</string>
+    <string name="breadth_narrow">Narrow</string>
+    <string name="breadth_narrow_explanation">One event, such as a single race.</string>
+    <string name="breadth_broad">Broad</string>
+    <string name="breadth_broad_explanation">A whole subject, such as all of a sport or a series.</string>
 </resources>
