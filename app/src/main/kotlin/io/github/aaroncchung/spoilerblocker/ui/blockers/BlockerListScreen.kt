@@ -297,10 +297,13 @@ private fun BlockerRow(
             Text(blocker.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
         },
         supportingContent = {
-            val summary = if (blocker.strongTerms.isEmpty()) {
+            // The start of the lists, strong terms first, cut off at the end
+            // of the line. It is there to recognise the blocker by.
+            val everything = blocker.strongTerms + blocker.weakTerms + blocker.sources
+            val summary = if (everything.isEmpty()) {
                 stringResource(R.string.blockers_no_terms)
             } else {
-                blocker.strongTerms.joinToString(", ")
+                everything.joinToString(", ")
             }
             Text(summary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
@@ -330,6 +333,8 @@ private fun BlockerListPreview() {
                         strongTerms = listOf("Japanese Grand Prix", "Suzuka", "#JapaneseGP"),
                         enabled = true,
                         createdAtMillis = 0,
+                        weakTerms = listOf("Max", "podium"),
+                        sources = listOf("FORMULA 1"),
                     ),
                     Blocker(
                         id = "2",

@@ -50,4 +50,9 @@ class ActiveBlockers(blockers: List<Blocker>) {
 }
 
 /** The one place where a stored [Blocker] becomes the term lists the matcher needs. */
-fun Blocker.toBlockerTerms(): BlockerTerms = BlockerTerms(strong = strongTerms)
+fun Blocker.toBlockerTerms(): BlockerTerms = BlockerTerms(
+    strong = strongTerms,
+    weak = weakTerms,
+    sources = sources,
+    breadth = breadth,
+)
