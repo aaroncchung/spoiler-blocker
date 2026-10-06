@@ -37,8 +37,11 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 |---|---|
 | `app/` | The Android app. Package `io.github.aaroncchung.spoilerblocker`. |
 | `app/…/SpoilerBlockerApplication.kt` | The Application and `AppContainer`, which owns the objects shared by the whole app. |
-| `app/…/data/` | `Blocker` and `BlockerRepository`. Blockers are stored as JSON in `files/blockers.json`. |
+| `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. |
+| `app/…/blocking/` | `ActiveBlockers`, which decides which enabled blocker blocks something. Plain Kotlin, shared by the notification listener and, later, the screen reader. |
+| `app/…/notifications/` | The notification listener, `NotificationContent` (a notification's text as plain Kotlin) and the notification access helpers. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
+| `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
@@ -56,15 +59,21 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
   tested on a PC. Every pull request with logic has tests for it.
 - No dependency injection framework and no new library without a reason given
   in the pull request. Shared objects live in `AppContainer`.
-- There is one `BlockerRepository` per process; get it from `AppContainer`. A
-  second one on the same file throws.
-- A new field on `Blocker` needs a default value, so that blockers stored by
-  an older build still load, and a raised `CURRENT_VERSION` in
-  `BlockerRepository.kt`, so that an older build refuses the newer file
-  instead of stripping the field. Add a new frozen document to
-  `BlockerRepositoryTest` at the same time.
+- There is one `BlockerRepository` and one `HiddenNotificationRepository` per
+  process; get them from `AppContainer`. A second one on the same file throws.
+- A new field on `Blocker` or `HiddenNotification` needs a default value, so
+  that what an older build stored still loads, and a raised `CURRENT_VERSION`
+  in its repository, so that an older build refuses the newer file instead of
+  stripping the field. Add a new frozen document to the repository's test at
+  the same time.
+- Work that must outlive a screen or a service runs in
+  `AppContainer.applicationScope`.
 - User-visible text goes in `res/values/strings.xml`.
 - Screen text is never stored or sent anywhere in normal use (decision 15).
   Only the description typed for a blocker ever leaves the phone (decision 8).
+  The one thing that is stored is the text of a hidden notification, in the
+  hidden list on the phone (decision 13).
+- A notification's title or text is never logged, in any build type. The
+  listener logs the package and its decision, in debug builds only.
 - Update `docs/ARCHITECTURE.md` when a decision changes status, and this file
   when a module or command is added.
