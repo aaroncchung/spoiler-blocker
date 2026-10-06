@@ -137,9 +137,14 @@ class Heartbeat(private val context: Context, private val service: String) {
     private val beat = object : Runnable {
         override fun run() {
             count++
+            // The battery setting and the standby bucket are on every line
+            // because One UI may move an unused app to a stricter bucket
+            // days into a run. The summary reports each change.
             ProbeLog.log(
                 E6.TAG,
-                "${E6.HEARTBEAT} $service n=$count ${DeviceState.screenAndDoze(context)} ${DeviceState.switchesInSettings(context)}",
+                "${E6.HEARTBEAT} $service n=$count ${DeviceState.screenAndDoze(context)} " +
+                    "${DeviceState.switchesInSettings(context)} " +
+                    "battery=${DeviceState.batteryMode(context)} bucket=${DeviceState.standbyBucket(context)}",
             )
             handler.postDelayed(this, HeartbeatSummary.INTERVAL_MS)
         }

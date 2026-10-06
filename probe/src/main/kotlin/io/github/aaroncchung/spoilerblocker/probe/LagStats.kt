@@ -3,12 +3,17 @@ package io.github.aaroncchung.spoilerblocker.probe
 import kotlin.math.ceil
 
 /**
- * E2: the timing of one box update. Every field is in milliseconds after the
- * moment the update was caused (an accessibility event, or a polled frame).
+ * E2: the timing of one box update. Every time is in milliseconds after the
+ * moment the update was caused. For an accessibility event that moment is
+ * when the app sent the event; for a poll it is when the probe's frame began.
+ * The two starting points differ, so the two kinds must not be compared.
  *
- * [frame] and [committed] are null when the mechanism cannot report them.
+ * [app] is the package in front, so that YouTube and Instagram are kept apart.
+ * [frame] and [committed] are null when the mechanism cannot report them, or
+ * when the report did not arrive in time.
  */
 data class LagSample(
+    val app: String,
     val mechanism: String,
     val trigger: String,
     val received: Long,
@@ -31,23 +36,45 @@ object LagStats {
         return sorted[rank - 1]
     }
 
-    /** One line per mechanism and trigger, each stage as "median/90th percentile/max". */
-    fun summarise(samples: List<LagSample>): List<String> {
+    /** "median/90th percentile/max" of [values], or "-" if there are none. */
+    fun spread(values: List<Long>): String =
+        if (values.isEmpty()) "-" else "${percentile(values, 50)}/${percentile(values, 90)}/${values.max()}"
+
+    /**
+     * One line per app, mechanism and trigger.
+     *
+     * `n` counts the box updates in the group. `commit-n` counts those whose
+     * commit time arrived; the commit figures are about those only.
+     * [dropped] is how many updates came after the store was full and are
+     * therefore missing from every figure.
+     */
+    fun summarise(samples: List<LagSample>, dropped: Int = 0): List<String> {
         if (samples.isEmpty()) return listOf("no box updates recorded yet")
-        return samples
-            .groupBy { it.mechanism to it.trigger }
+        val lines = samples
+            .groupBy { Triple(it.app, it.mechanism, it.trigger) }
             .map { (key, group) ->
-                val (mechanism, trigger) = key
-                "mech=$mechanism by=$trigger n=${group.size}" +
-                    " recv=${stage(group.map { it.received })}" +
-                    " bounds=${stage(group.map { it.boundsRead })}" +
-                    " submit=${stage(group.map { it.submitted })}" +
-                    " frame=${stage(group.mapNotNull { it.frame })}" +
-                    " commit=${stage(group.mapNotNull { it.committed })}" +
+                val (app, mechanism, trigger) = key
+                val committed = group.mapNotNull { it.committed }
+                "app=$app mech=$mechanism by=$trigger n=${group.size}" +
+                    " recv=${spread(group.map { it.received })}" +
+                    " bounds=${spread(group.map { it.boundsRead })}" +
+                    " submit=${spread(group.map { it.submitted })}" +
+                    " frame=${spread(group.mapNotNull { it.frame })}" +
+                    " commit=${spread(committed)} commit-n=${committed.size}" +
                     " (median/p90/max ms after the event)"
             }
+        return if (dropped > 0) {
+            lines + "CAPPED: $dropped later box updates are not in these figures. Reset the summary between clips."
+        } else {
+            lines
+        }
     }
 
-    private fun stage(values: List<Long>): String =
-        if (values.isEmpty()) "-" else "${percentile(values, 50)}/${percentile(values, 90)}/${values.max()}"
+    /**
+     * The gaps between neighbouring [times], which must be in order. Gaps
+     * longer than [longestCounted] are left out: they are the pauses between
+     * two gestures, not the rhythm within one.
+     */
+    fun intervals(times: List<Long>, longestCounted: Long): List<Long> =
+        times.zipWithNext { earlier, later -> later - earlier }.filter { it in 0..longestCounted }
 }

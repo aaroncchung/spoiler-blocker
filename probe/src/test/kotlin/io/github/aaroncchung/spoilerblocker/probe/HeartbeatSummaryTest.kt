@@ -267,7 +267,103 @@ class HeartbeatSummaryTest {
 
         assertEquals(30 * minute, summary.a11y().awakeSinceLastBeatMillis)
         assertTrue(text, text.contains("a11y: NOT RUNNING. No heartbeat for 30 min 00 s of awake time"))
-        assertTrue(text, text.contains("nls: no heartbeat yet"))
+        // The listener never wrote a heartbeat at all. After half an hour that is not "pending".
+        assertTrue(
+            text,
+            text.contains("nls: NOT RUNNING. No heartbeat at all in the 31 min 00 s since the run began. Connected 0 time(s)."),
+        )
+    }
+
+    @Test
+    fun aServiceWithNoHeartbeatIsOnlyPendingForAMoment() {
+        val records = listOf(
+            e6(0, 0, "run-start battery=optimised bucket=active label=night-a"),
+            e6(1_000, 1_000, "heartbeat a11y n=7"),
+        )
+
+        val early = HeartbeatSummary.describe(HeartbeatSummary.compute(records, now(60_000, 60_000)), ZoneId.of("UTC"))
+        val late = HeartbeatSummary.describe(HeartbeatSummary.compute(records, now(91_000, 91_000)), ZoneId.of("UTC"))
+
+        assertEquals("nls: no heartbeat yet. Connected 0 time(s).", early.last())
+        assertEquals(
+            "nls: NOT RUNNING. No heartbeat at all in the 1 min 31 s since the run began. Connected 0 time(s).",
+            late.last(),
+        )
+    }
+
+    @Test
+    fun theAgeOfARunIsAwakeTimeNotSleepTime() {
+        // Eight hours on the wall, but the phone was awake for one minute of them.
+        val records = listOf(e6(0, 0, "run-start battery=optimised bucket=active label=night-a"))
+
+        val summary = HeartbeatSummary.compute(records, now(minute, 8 * hour))
+
+        assertEquals(minute, summary.runAgeMillis)
+        assertEquals(
+            "a11y: no heartbeat yet. Connected 0 time(s).",
+            HeartbeatSummary.describe(summary, ZoneId.of("UTC"))[2],
+        )
+    }
+
+    @Test
+    fun theAgeOfARunAcrossARebootUsesTheTimeOfDay() {
+        val records = listOf(
+            e6(5 * hour, 9 * hour, "process-start boot=7", pid = 100),
+            e6(1_000, 1_000, "process-start boot=8", pid = 150, wall = startWall + 10 * hour),
+        )
+
+        // "Now" is two seconds after the second boot's first line.
+        val nowAfterReboot = LogRecord(startWall + 10 * hour + 2_000, 3_000, 3_000, 150, E6.TAG, "")
+        val summary = HeartbeatSummary.compute(records, nowAfterReboot)
+
+        assertEquals(hour + 2_000, summary.runAgeMillis)
+    }
+
+    @Test
+    fun anEmptyLogHasNoAge() {
+        assertNull(HeartbeatSummary.compute(emptyList(), now(1_000, 1_000)).runAgeMillis)
+    }
+
+    @Test
+    fun reportsEveryChangeOfStandbyBucketAndBatterySetting() {
+        val records = listOf(
+            e6(0, 0, "heartbeat a11y n=1 screen=off doze=false a11y-setting=on nls-setting=on battery=optimised bucket=active"),
+            e6(0, 0, "heartbeat nls n=1 screen=off doze=false a11y-setting=on nls-setting=on battery=optimised bucket=active"),
+            e6(minute, minute, "heartbeat a11y n=2 screen=off doze=true a11y-setting=on nls-setting=on battery=optimised bucket=rare"),
+            e6(minute, minute, "heartbeat nls n=2 screen=off doze=true a11y-setting=on nls-setting=on battery=optimised bucket=rare"),
+            e6(2 * minute, 2 * minute, "heartbeat a11y n=3 screen=off doze=true a11y-setting=on nls-setting=on battery=optimised bucket=restricted"),
+            e6(3 * minute, 3 * minute, "heartbeat a11y n=4 screen=on doze=false a11y-setting=on nls-setting=on battery=optimised bucket=active"),
+        )
+
+        val summary = HeartbeatSummary.compute(records, now(3 * minute, 3 * minute))
+        val text = HeartbeatSummary.describe(summary, ZoneId.of("UTC"))
+
+        assertEquals(listOf("active", "rare", "restricted", "active"), summary.standbyBuckets)
+        assertEquals(listOf("optimised"), summary.batteryModes)
+        assertEquals("Standby bucket during the run: active, then rare, then restricted, then active.", text[1])
+        assertEquals("Battery setting during the run: optimised.", text[2])
+    }
+
+    @Test
+    fun saysWhatAStallCanAndCannotMean() {
+        val records = listOf(
+            e6(0, 0, "heartbeat a11y n=1"),
+            e6(10 * minute, 10 * minute, "heartbeat a11y n=2"),
+        )
+
+        val text = HeartbeatSummary.describe(
+            HeartbeatSummary.compute(records, now(10 * minute, 10 * minute)),
+            ZoneId.of("UTC"),
+        ).joinToString(" | ")
+
+        assertTrue(
+            text,
+            text.contains(
+                "a11y: GAP from 2025-10-09 08:53:20: the process stayed alive but did not run " +
+                    "(a freezer, or a blocked main thread; the log cannot say which); " +
+                    "10 min 00 s awake, 10 min 00 s in real time.",
+            ),
+        )
     }
 
     @Test

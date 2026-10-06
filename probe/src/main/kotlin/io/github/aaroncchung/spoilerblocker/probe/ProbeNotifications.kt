@@ -79,7 +79,9 @@ object ProbeNotifications {
             setOnClickPendingIntent(R.id.control_repick, trigger(context, ProbeActions.REPICK))
             setOnClickPendingIntent(R.id.control_next_list, trigger(context, ProbeActions.NEXT_LIST))
             setOnClickPendingIntent(R.id.control_next_mechanism, trigger(context, ProbeActions.MECHANISM))
-            setOnClickPendingIntent(R.id.control_summary, trigger(context, ProbeActions.E2_SUMMARY))
+            // The button also starts a fresh count, so that each filmed clip
+            // gets a summary of its own without anything further to press.
+            setOnClickPendingIntent(R.id.control_summary, trigger(context, ProbeActions.E2_SUMMARY, reset = true))
             setOnClickPendingIntent(R.id.control_screenshot, trigger(context, ProbeActions.SCREENSHOT))
             setOnClickPendingIntent(R.id.control_rate_test, trigger(context, ProbeActions.RATE_TEST))
             setOnClickPendingIntent(R.id.control_dump_tree, trigger(context, ProbeActions.DUMP_TREE))
@@ -109,10 +111,11 @@ object ProbeNotifications {
     }
 
     /** A broadcast to [TriggerReceiver], to be sent when a notification button is pressed. */
-    private fun trigger(context: Context, probeAction: String): PendingIntent {
+    private fun trigger(context: Context, probeAction: String, reset: Boolean = false): PendingIntent {
         val intent = Intent(probeAction)
             .setClass(context, TriggerReceiver::class.java)
             .putExtra(EXTRA_FROM_SHADE, true)
+            .putExtra(ProbeActions.EXTRA_RESET, reset)
         // FLAG_IMMUTABLE: nobody who gets hold of this may alter the broadcast.
         return PendingIntent.getBroadcast(
             context,
@@ -125,6 +128,14 @@ object ProbeNotifications {
     /** E4: posts one banner notification after [delayMillis], leaving time to start filming. */
     fun postTestAfter(context: Context, delayMillis: Long) {
         val appContext = context.applicationContext
+        if (ProbeSettings.filmStripEnabled) {
+            // The strip is an opaque band over the status bar, left on from E2
+            // or E3. A banner, or part of one, could be hidden behind it, and
+            // "no banner on film" would then mean nothing.
+            ProbeSettings.updateFilmStripEnabled(false)
+            ProbeAccessibilityService.applySettings()
+            ProbeLog.log("E4", "film strip switched off: it covers the status bar and could hide a banner")
+        }
         ProbeLog.log("E4", "test notification will be posted in ${delayMillis}ms")
         handler.postDelayed({ postTest(appContext) }, delayMillis)
     }

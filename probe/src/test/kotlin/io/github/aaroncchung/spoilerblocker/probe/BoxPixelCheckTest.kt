@@ -63,6 +63,25 @@ class BoxPixelCheckTest {
     }
 
     @Test
+    fun aBlankImageIsOneFlatColour() {
+        val black = 0xFF000000.toInt()
+        val nearlyBlack = 0xFF050505.toInt()
+
+        assertEquals(true, BoxPixelCheck.isOneFlatColour(IntArray(500) { black }))
+        assertEquals(true, BoxPixelCheck.isOneFlatColour(intArrayOf(black, nearlyBlack, black)))
+        assertEquals(true, BoxPixelCheck.isOneFlatColour(IntArray(0)))
+    }
+
+    @Test
+    fun aPictureOfAnAppIsNotOneFlatColour() {
+        // A white page with a single dark pixel of text is already a picture.
+        val pixels = IntArray(500) { white }
+        pixels[321] = 0xFF202020.toInt()
+
+        assertEquals(false, BoxPixelCheck.isOneFlatColour(pixels))
+    }
+
+    @Test
     fun verdictNeedsAClearMajorityEitherWay() {
         assertEquals(Verdict.BOX_PRESENT, BoxPixelCheck.verdict(1.0))
         assertEquals(Verdict.BOX_PRESENT, BoxPixelCheck.verdict(0.9))

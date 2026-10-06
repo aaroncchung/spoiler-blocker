@@ -31,7 +31,7 @@ enum class GapKind(val label: String) {
     REBOOTED("the phone was rebooted"),
     PROCESS_RESTARTED("the app's process died and was started again"),
     SERVICE_DISCONNECTED("Android disconnected the service but the process stayed alive"),
-    STALLED("the process stayed alive but did not run (frozen or blocked)"),
+    STALLED("the process stayed alive but did not run (a freezer, or a blocked main thread; the log cannot say which)"),
 }
 
 /**
@@ -70,8 +70,17 @@ data class ServiceRun(
 data class RunSummary(
     val runStartWallMillis: Long?,
     val runLabel: String?,
+    /**
+     * How long ago the run began: awake time, or time of day if the phone was
+     * rebooted in between. Null if the log has no E6 lines at all.
+     */
+    val runAgeMillis: Long?,
     val processStarts: Int,
     val reboots: Int,
+    /** The standby buckets the heartbeats reported, in the order they first appeared one after another. */
+    val standbyBuckets: List<String>,
+    /** The battery settings the heartbeats reported, likewise. */
+    val batteryModes: List<String>,
     val services: List<ServiceRun>,
     val exitInfo: List<String>,
 )
@@ -179,6 +188,8 @@ object HeartbeatSummary {
         var reboots = 0
         var lastBoot: String? = null
         val exitInfo = mutableListOf<String>()
+        val standbyBuckets = mutableListOf<String>()
+        val batteryModes = mutableListOf<String>()
 
         for (record in run) {
             val words = record.message.split(' ')
@@ -194,7 +205,14 @@ object HeartbeatSummary {
                         if (rebooted) tracker.rebooted = true
                     }
                 }
-                E6.HEARTBEAT -> trackers.firstOrNull { it.service == words.getOrNull(1) }?.onHeartbeat(record)
+                E6.HEARTBEAT -> {
+                    trackers.firstOrNull { it.service == words.getOrNull(1) }?.onHeartbeat(record)
+                    // Each heartbeat says which bucket and battery setting the
+                    // app was in. Note every change, so a move to a more
+                    // restricted bucket during the run is not missed.
+                    noteChange(standbyBuckets, words, "bucket=")
+                    noteChange(batteryModes, words, "battery=")
+                }
                 E6.EXIT_INFO -> exitInfo += record.message.removePrefix(E6.EXIT_INFO).trim()
                 else -> {
                     // Lifecycle lines look like "a11y connected" or "nls disconnected (...)".
@@ -210,14 +228,30 @@ object HeartbeatSummary {
             }
         }
 
+        val first = run.firstOrNull()
+        val runAge = when {
+            first == null -> null
+            // The uptime clock restarts at a reboot, so fall back on the time of day.
+            reboots > 0 || now.realtimeMillis < first.realtimeMillis -> now.wallMillis - first.wallMillis
+            else -> now.uptimeMillis - first.uptimeMillis
+        }
         return RunSummary(
             runStartWallMillis = runStart?.wallMillis,
             runLabel = runStart?.message?.removePrefix(E6.RUN_START)?.trim()?.ifEmpty { null },
+            runAgeMillis = runAge,
             processStarts = processStarts,
             reboots = reboots,
+            standbyBuckets = standbyBuckets,
+            batteryModes = batteryModes,
             services = trackers.map { it.finish(now) },
             exitInfo = exitInfo,
         )
+    }
+
+    /** Adds the value of the word starting with [prefix] to [seen], unless it repeats the last one. */
+    private fun noteChange(seen: MutableList<String>, words: List<String>, prefix: String) {
+        val value = words.firstOrNull { it.startsWith(prefix) }?.removePrefix(prefix) ?: return
+        if (seen.lastOrNull() != value) seen += value
     }
 
     /** The summary as lines of plain text, for the screen and for the log. */
@@ -232,10 +266,25 @@ object HeartbeatSummary {
             lines += "Process started ${summary.processStarts} time(s) in this log (more than 1 means it died and came back). " +
                 "Reboots: ${summary.reboots}."
         }
+        if (summary.standbyBuckets.isNotEmpty()) {
+            lines += "Standby bucket during the run: ${summary.standbyBuckets.joinToString(", then ")}."
+        }
+        if (summary.batteryModes.isNotEmpty()) {
+            lines += "Battery setting during the run: ${summary.batteryModes.joinToString(", then ")}."
+        }
         for (run in summary.services) {
             val name = run.service
             if (run.heartbeats == 0) {
-                lines += "$name: no heartbeat yet. Connected ${run.connects} time(s)."
+                val age = summary.runAgeMillis
+                // A service that is connected writes its first heartbeat at
+                // once. If the run is older than a missed beat and there is
+                // still none, the service is not waiting to start: it is not there.
+                lines += if (age != null && age > GAP_THRESHOLD_MS) {
+                    "$name: NOT RUNNING. No heartbeat at all in the ${duration(age)} since the run began. " +
+                        "Connected ${run.connects} time(s)."
+                } else {
+                    "$name: no heartbeat yet. Connected ${run.connects} time(s)."
+                }
                 continue
             }
             // After a run-start marker the first connection is not in the run, so only reconnections are counted.

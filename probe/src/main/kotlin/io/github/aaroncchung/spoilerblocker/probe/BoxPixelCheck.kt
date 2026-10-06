@@ -31,6 +31,15 @@ object BoxPixelCheck {
     }
 
     /**
+     * True if every pixel has the same colour, give or take [tolerance]. That
+     * is what a blank or failed screenshot looks like. A blank image would
+     * also "not contain the box", so it must be told apart from a real picture
+     * of the app. An empty array counts as blank.
+     */
+    fun isOneFlatColour(pixels: IntArray, tolerance: Int = DEFAULT_TOLERANCE): Boolean =
+        pixels.isEmpty() || matchFraction(pixels, pixels[0], tolerance) == 1.0
+
+    /**
      * Nearly all pixels matching means the box is in the picture; nearly none
      * means it is not. Anything in between needs a person to look at the image.
      */

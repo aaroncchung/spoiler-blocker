@@ -9,8 +9,16 @@ import androidx.compose.runtime.setValue
 
 /**
  * E4: dismisses every notification from one chosen app as fast as it can and
- * logs how long each step took. Whether the banner was visible first has to be
- * seen on film; the log says how big the window was.
+ * logs how long each step took.
+ *
+ * The log cannot say whether a banner was seen. Android tells the status bar
+ * about a notification at the same moment as it tells this listener. If the
+ * status bar has put the banner up by the time the dismissal reaches it, it
+ * keeps the banner for a minimum time before taking it down (in Android's
+ * own status bar, 2 seconds, or half a second in some configurations). So the
+ * outcome is all or nothing: no banner, or a banner for a second or so. Only
+ * the film tells which. "removed" below is when Android dropped the
+ * notification from its list, not when a banner left the screen.
  *
  * Android only connects this service after the owner turns on "notification
  * access" for SB Probe in Settings.
@@ -53,6 +61,9 @@ class ProbeNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val called = SystemClock.uptimeMillis()
         val calledWall = System.currentTimeMillis()
+        // A real app's notifications are only dismissed for a limited time.
+        // Check the limit here, before anything is dismissed.
+        ProbeSettings.expireForeignTargetIfDue()
         if (!ProbeSettings.cancelEnabled || sbn.packageName != ProbeSettings.cancelPackage) return
         // When the chosen app is the probe itself, dismiss only the test
         // notifications. That leaves the control notification alone, and the
@@ -85,8 +96,9 @@ class ProbeNotificationListener : NotificationListenerService() {
         // Reason 10 is REASON_LISTENER_CANCEL: removed because a listener asked.
         ProbeLog.log(
             "E4",
-            "removed pkg=${sbn.packageName} id=${sbn.id} reason=$reason " +
-                "+${SystemClock.uptimeMillis() - requested}ms after the listener was called",
+            "removed from Android's list pkg=${sbn.packageName} id=${sbn.id} reason=$reason " +
+                "+${SystemClock.uptimeMillis() - requested}ms after the listener was called " +
+                "(not the end of a banner: one that reached the screen stays about a second)",
         )
     }
 

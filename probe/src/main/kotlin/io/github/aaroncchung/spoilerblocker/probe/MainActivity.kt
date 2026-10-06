@@ -229,14 +229,18 @@ private fun BoxSection() {
         ProbeSettings.updateFilmStripEnabled(it)
         ProbeAccessibilityService.applySettings()
     }
+    Text(
+        "A summary covers every box move since the last reset. Reset after each filmed clip, or clips " +
+            "run together. The Summary button on the notification always resets.",
+    )
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { ProbeAccessibilityService.trigger(ProbeActions.E2_SUMMARY, Intent()) }) {
-            Text("Log timing summary")
-        }
         Button(onClick = {
             ProbeAccessibilityService.trigger(ProbeActions.E2_SUMMARY, Intent().putExtra(ProbeActions.EXTRA_RESET, true))
         }) {
             Text("Summary, then reset")
+        }
+        Button(onClick = { ProbeAccessibilityService.trigger(ProbeActions.E2_SUMMARY, Intent()) }) {
+            Text("Summary, keep counting")
         }
     }
 }
@@ -272,7 +276,15 @@ private fun NotificationSection() {
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    Text("The probe's own package is ${context.packageName}. Film the top of the screen, then:")
+    Text(
+        "The probe's own package is ${context.packageName}. For any other app, dismissing switches " +
+            "itself back to the probe after ${DismissTimeLimit.LIMIT_MS / 60_000} minutes: a dismissed " +
+            "notification is gone for good and the probe keeps no copy.",
+    )
+    ProbeSettings.foreignTargetWarning()?.let { warning ->
+        Text(warning, color = MaterialTheme.colorScheme.error)
+    }
+    Text("Posting a test switches the film strip off, because the strip could hide the banner. Film the top of the screen, then:")
     Button(onClick = { ProbeNotifications.postTestAfter(context, 3000) }) {
         Text("Post a test notification in 3 s")
     }

@@ -27,7 +27,10 @@ object ProbeActions {
     /** E2: `--ez on true|false` shows or hides the box. */
     const val BOX = "sbprobe.BOX"
 
-    /** E2: log the timing summary. `--ez reset true` also starts a fresh count. */
+    /**
+     * E2: log the timing summary. `--ez reset true` also starts a fresh count,
+     * which is wanted after every filmed clip. The notification button always resets.
+     */
     const val E2_SUMMARY = "sbprobe.E2_SUMMARY"
 
     /** E2 and E3: `--ez on true|false` shows or hides the film strip. */

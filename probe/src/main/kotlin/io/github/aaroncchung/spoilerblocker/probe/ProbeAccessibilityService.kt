@@ -7,10 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.Choreographer
+import android.view.Display
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -39,8 +42,20 @@ import androidx.compose.runtime.setValue
  */
 class ProbeAccessibilityService : AccessibilityService() {
 
-    /** The list item the box follows. */
-    private class Target(val node: AccessibilityNodeInfo, val windowId: Int)
+    /**
+     * The list item the box follows.
+     *
+     * [windowLeft] and [windowTop] say where the item's window sits on the
+     * screen. They are needed for items that do not report their own position
+     * within the window; see [boundsInWindow].
+     */
+    private class Target(
+        val node: AccessibilityNodeInfo,
+        val windowId: Int,
+        val app: String,
+        val windowLeft: Int,
+        val windowTop: Int,
+    )
 
     /** What a pick should choose. */
     private enum class Pick {
@@ -60,6 +75,7 @@ class ProbeAccessibilityService : AccessibilityService() {
     /** The timing of one box update, filled in as each stage reports back. All times are uptime ms. */
     private class Trace(
         val number: Int,
+        val app: String,
         val mechanism: OverlayMechanism,
         val trigger: String,
         val eventTime: Long,
@@ -77,11 +93,8 @@ class ProbeAccessibilityService : AccessibilityService() {
         var logged = false
     }
 
-    /** One report that a finger went down. */
-    private class Touch(val number: Int, val source: String, val downTime: Long, val received: Long) {
-        /** The kinds of event already matched to this touch, so each is logged once. */
-        val matched = HashSet<String>()
-    }
+    /** One scroll event from the watched app: which app, and when it was sent (uptime ms). */
+    private class ScrollEvent(val app: String, val eventTime: Long)
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var heartbeat: Heartbeat
@@ -101,12 +114,22 @@ class ProbeAccessibilityService : AccessibilityService() {
     /** True while the notification shade or a system dialog covers the app. The box is hidden meanwhile. */
     private var systemUiInFront = false
     private var updateCount = 0
-    private val lagSamples = ArrayList<LagSample>()
     private var polling = false
 
+    // E2: what the summary is worked out from. Emptied by "summary reset".
+    private val lagSamples = ArrayList<LagSample>()
+    private var lagSamplesDropped = 0
+    private val scrollEvents = ArrayList<ScrollEvent>()
+    private val pollFrameIntervals = ArrayList<Long>()
+    private var lastPollFrameMillis = 0L
+
+    // E2: the scroll that is going on now, for the "scroll ended" line.
+    private var scrollRunEvents = 0
+    private var scrollRunFirstEvent = 0L
+    private var scrollRunLastEvent = 0L
+
     // E3
-    private var touchCount = 0
-    private var lastTouch: Touch? = null
+    private val touches = TouchMatcher()
     private var motionListening = false
     private var motionEventsSeen = 0
     private var scrollEventsWhileListening = 0
@@ -213,11 +236,19 @@ class ProbeAccessibilityService : AccessibilityService() {
             lastBox = null
         }
         setPolling(ProbeSettings.boxEnabled && ProbeSettings.trackingMode == TrackingMode.POLL)
+        showControls()
+    }
 
-        ProbeNotifications.showControls(
-            this,
+    /** Posts the control notification again, so that its line of text is up to date. */
+    private fun showControls() {
+        val mechanism = ProbeSettings.mechanism
+        // While a real app's notifications are being dismissed (E4), say so
+        // first: they are lost for good, and it must not be forgotten.
+        val status = listOfNotNull(
+            ProbeSettings.foreignTargetWarning(),
             "${mechanism.id} (${mechanism.colourName}), tracking by ${ProbeSettings.trackingMode.id}",
-        )
+        ).joinToString(". ")
+        ProbeNotifications.showControls(this, status)
     }
 
     // ---- Events ----
@@ -228,9 +259,10 @@ class ProbeAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 filmStrip.markScrollEvent()
                 if (motionListening) scrollEventsWhileListening++
-                onContentMoved("VIEW_SCROLLED", event, received, event.scrollDeltaY)
+                onContentMoved(TouchMatcher.VIEW_SCROLLED, event, received, event.scrollDeltaY)
             }
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> onContentMoved("CONTENT_CHANGED", event, received, null)
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ->
+                onContentMoved(TouchMatcher.CONTENT_CHANGED, event, received, null)
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 // A new screen or app. Wait for it to settle, then look at it once.
                 handler.removeCallbacks(frontCheck)
@@ -259,10 +291,40 @@ class ProbeAccessibilityService : AccessibilityService() {
             handler.removeCallbacks(frontCheck)
             handler.post(frontCheck)
         }
-        matchWithTouch(kind, event.eventTime, received)
+        touches.onEvent(kind, event.eventTime, received)?.let { ProbeLog.log("E3", it) }
+        if (kind == TouchMatcher.VIEW_SCROLLED) noteScrollEvent(event)
         if (current != null && ProbeSettings.trackingMode == TrackingMode.EVENTS) {
             updateBox(kind, event.eventTime, received, scrollDeltaY)
         }
+    }
+
+    /**
+     * Keeps every scroll event's send time, whether or not it moved the box.
+     *
+     * The real app must decide that a scroll has ended, and all it can go by
+     * is that no scroll event has come for a while. How long "a while" must
+     * be depends on the gaps between events during a scroll, which the
+     * summary reports. The "scroll ended" line gives the time of the last
+     * event, to hold against the moment the content stops on film.
+     */
+    private fun noteScrollEvent(event: AccessibilityEvent) {
+        if (scrollEvents.size < MAX_LAG_SAMPLES) {
+            scrollEvents += ScrollEvent(event.packageName?.toString().orEmpty(), event.eventTime)
+        }
+        if (scrollRunEvents == 0) scrollRunFirstEvent = event.eventTime
+        scrollRunEvents++
+        scrollRunLastEvent = event.eventTime
+        handler.removeCallbacks(scrollRunEnded)
+        handler.postDelayed(scrollRunEnded, SCROLL_RUN_QUIET_MS)
+    }
+
+    private val scrollRunEnded = Runnable {
+        ProbeLog.log(
+            "E2",
+            "scroll ended: $scrollRunEvents scroll events, first evt=$scrollRunFirstEvent last evt=$scrollRunLastEvent " +
+                "(then none for ${SCROLL_RUN_QUIET_MS}ms)",
+        )
+        scrollRunEvents = 0
     }
 
     private val frontCheck = Runnable {
@@ -325,16 +387,54 @@ class ProbeAccessibilityService : AccessibilityService() {
             items.size / 2
         }
         pickedWindowId = root.windowId
-        target = Target(items[itemIndex], root.windowId)
+        // Where the window is on the screen: its top element's position on
+        // the screen, less that element's position within the window.
+        val rootOnScreen = Rect().also { root.getBoundsInScreen(it) }
+        val rootInWindow = Rect().also { root.getBoundsInWindow(it) }
+        val picked = Target(
+            node = items[itemIndex],
+            windowId = root.windowId,
+            app = root.packageName?.toString().orEmpty(),
+            windowLeft = rootOnScreen.left - rootInWindow.left,
+            windowTop = rootOnScreen.top - rootInWindow.top,
+        )
+        target = picked
         lastBox = null
+
+        val onScreen = Rect().also { picked.node.getBoundsInScreen(it) }
+        val reportedInWindow = Rect().also { picked.node.getBoundsInWindow(it) }
+        val inWindowNote = if (reportedInWindow.isEmpty) {
+            "inWindow=${boundsInWindow(picked, onScreen).toShortString()} (worked out: the item reports no " +
+                "position within its window, so it is its screen position less the window's corner at " +
+                "${picked.windowLeft},${picked.windowTop})"
+        } else {
+            "inWindow=${reportedInWindow.toShortString()} (reported by the app)"
+        }
         // Class names and view ids describe structure. They are not screen text.
         ProbeLog.log(
             "E2",
             "picked item ${itemIndex + 1} of ${items.size} in list ${listIndex + 1} of ${lists.size} " +
-                "(${list.className} id=${list.viewIdResourceName}) window=${root.windowId} package=${root.packageName}",
+                "(${list.className} id=${list.viewIdResourceName}) window=${root.windowId} package=${root.packageName} " +
+                "onScreen=${onScreen.toShortString()} $inWindowNote",
         )
         val now = SystemClock.uptimeMillis()
         updateBox("pick", now, now, null)
+    }
+
+    /**
+     * The item's rectangle measured from the corner of its window, which is
+     * what an overlay attached to that window ("sc-window") and a screenshot
+     * of that window (E5) need.
+     *
+     * Only elements that are real Android views report this. Feeds are often
+     * drawn by the app's own code and described to Android as "virtual"
+     * elements, which report a screen position only. For those the rectangle
+     * is worked out from the screen position and the window's corner.
+     */
+    private fun boundsInWindow(item: Target, onScreen: Rect): Rect {
+        val reported = Rect().also { item.node.getBoundsInWindow(it) }
+        if (!reported.isEmpty) return reported
+        return Rect(onScreen).apply { offset(-item.windowLeft, -item.windowTop) }
     }
 
     /**
@@ -424,7 +524,7 @@ class ProbeAccessibilityService : AccessibilityService() {
         }
         val boundsRead = SystemClock.uptimeMillis()
         val onScreen = Rect().also { current.node.getBoundsInScreen(it) }
-        val inWindow = Rect().also { current.node.getBoundsInWindow(it) }
+        val inWindow = boundsInWindow(current, onScreen)
 
         if (!current.node.isVisibleToUser || onScreen.isEmpty) {
             if (lastBox != null) {
@@ -440,6 +540,7 @@ class ProbeAccessibilityService : AccessibilityService() {
 
         val trace = Trace(
             number = ++updateCount,
+            app = current.app,
             mechanism = mechanism,
             trigger = trigger,
             eventTime = eventTime,
@@ -492,25 +593,63 @@ class ProbeAccessibilityService : AccessibilityService() {
                 "frame=${after(trace.frame)} commit=${after(trace.committed)} " +
                 "top=${trace.top} moved=${trace.moved ?: "-"} dy=${trace.scrollDeltaY ?: "-"}",
         )
-        if (lagSamples.size < MAX_LAG_SAMPLES) {
-            lagSamples += LagSample(
-                mechanism = trace.mechanism.id,
-                trigger = trace.trigger,
-                received = trace.received - trace.eventTime,
-                boundsRead = trace.boundsRead - trace.eventTime,
-                submitted = trace.submitted - trace.eventTime,
-                frame = trace.frame?.let { it - trace.eventTime },
-                committed = trace.committed?.let { it - trace.eventTime },
-            )
+        // "pick" and "settings" updates are not caused by scrolling, so they
+        // would only blur the summary.
+        if (trace.trigger == "pick" || trace.trigger == "settings") return
+        if (lagSamples.size >= MAX_LAG_SAMPLES) {
+            // Full. The summary says how many were left out, so that a long
+            // session cannot pass for a short one.
+            lagSamplesDropped++
+            return
         }
+        lagSamples += LagSample(
+            app = trace.app,
+            mechanism = trace.mechanism.id,
+            trigger = trace.trigger,
+            received = trace.received - trace.eventTime,
+            boundsRead = trace.boundsRead - trace.eventTime,
+            submitted = trace.submitted - trace.eventTime,
+            frame = trace.frame?.let { it - trace.eventTime },
+            committed = trace.committed?.let { it - trace.eventTime },
+        )
     }
 
     private fun logLagSummary(reset: Boolean) {
-        // "pick" and "settings" updates are not caused by scrolling, so they would only blur the numbers.
-        val scrolling = lagSamples.filter { it.trigger != "pick" && it.trigger != "settings" }
-        LagStats.summarise(scrolling).forEach { ProbeLog.log("E2", "summary $it") }
+        LagStats.summarise(lagSamples, lagSamplesDropped).forEach { ProbeLog.log("E2", "summary $it") }
+
+        // The rhythm of the app's scroll events, per app. A scroll can only be
+        // known to have ended once a gap longer than these has passed.
+        // These two stores have the same limit as the box updates. Say so if
+        // it was reached, rather than pass a part off as the whole.
+        val scrollEventsCapped = if (scrollEvents.size >= MAX_LAG_SAMPLES) " CAPPED: later events not counted" else ""
+        val pollFramesCapped = if (pollFrameIntervals.size >= MAX_LAG_SAMPLES) " CAPPED: later frames not counted" else ""
+        for ((app, events) in scrollEvents.groupBy { it.app }) {
+            val gaps = LagStats.intervals(events.map { it.eventTime }, SCROLL_GAP_LONGEST_COUNTED_MS)
+            ProbeLog.log(
+                "E2",
+                "summary app=$app scroll events n=${events.size} gap between neighbours=${LagStats.spread(gaps)} " +
+                    "(median/p90/max ms; pauses over ${SCROLL_GAP_LONGEST_COUNTED_MS}ms left out)$scrollEventsCapped",
+            )
+        }
+
+        // How often the probe itself got to run a frame while polling. If
+        // this is not the screen's own rhythm, the box cannot be either.
+        // The display's figure is the rate of the mode it is set to. An
+        // adaptive screen may be running slower than that at any one moment,
+        // which is why the measured interval is the figure to trust.
+        val display = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+        val powerSaving = getSystemService(PowerManager::class.java).isPowerSaveMode
+        ProbeLog.log(
+            "E2",
+            "summary poll frames n=${pollFrameIntervals.size} interval=${LagStats.spread(pollFrameIntervals)} " +
+                "(median/p90/max ms) display mode=${display.refreshRate}Hz power saving=$powerSaving$pollFramesCapped",
+        )
+
         if (reset) {
             lagSamples.clear()
+            lagSamplesDropped = 0
+            scrollEvents.clear()
+            pollFrameIntervals.clear()
             ProbeLog.log("E2", "summary reset")
         }
     }
@@ -519,6 +658,18 @@ class ProbeAccessibilityService : AccessibilityService() {
     private val pollFrame = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!polling) return
+            // frameTimeNanos is the display's own tick for this frame, on the
+            // same clock as uptimeMillis. The gaps between ticks show how
+            // often the probe is really given a frame.
+            val frameMillis = frameTimeNanos / 1_000_000
+            val sinceLast = frameMillis - lastPollFrameMillis
+            if (lastPollFrameMillis != 0L && sinceLast in 1..POLL_GAP_LONGEST_COUNTED_MS &&
+                pollFrameIntervals.size < MAX_LAG_SAMPLES
+            ) {
+                pollFrameIntervals += sinceLast
+            }
+            lastPollFrameMillis = frameMillis
+
             val now = SystemClock.uptimeMillis()
             updateBox("poll", now, now, null)
             Choreographer.getInstance().postFrameCallback(this)
@@ -528,35 +679,17 @@ class ProbeAccessibilityService : AccessibilityService() {
     private fun setPolling(on: Boolean) {
         if (on == polling) return
         polling = on
+        lastPollFrameMillis = 0L
         if (on) Choreographer.getInstance().postFrameCallback(pollFrame)
     }
 
     // ---- E3: signals that a finger went down ----
 
+    /** A mechanism reports that a finger went down. [TouchMatcher] holds the rules for what to log. */
     private fun onTouchSignal(source: String, downTime: Long, received: Long) {
-        val previous = lastTouch
-        if (previous != null && previous.downTime == downTime) {
-            // A second mechanism reporting the same finger.
-            ProbeLog.log("E3", "touch #${previous.number} src=$source down=$downTime recv=+${received - downTime}ms")
-            return
-        }
-        touchCount++
-        lastTouch = Touch(touchCount, source, downTime, received)
-        filmStrip.markTouch()
-        ProbeLog.log("E3", "touch #$touchCount src=$source down=$downTime recv=+${received - downTime}ms")
-    }
-
-    /** Logs how long after the latest touch the first event of each [kind] came. */
-    private fun matchWithTouch(kind: String, eventTime: Long, received: Long) {
-        val touch = lastTouch ?: return
-        if (eventTime < touch.downTime || eventTime - touch.downTime > MATCH_WINDOW_MS) return
-        if (!touch.matched.add(kind)) return
-        ProbeLog.log(
-            "E3",
-            "touch #${touch.number}: first $kind sent +${eventTime - touch.downTime}ms and received " +
-                "+${received - touch.downTime}ms after touch-down; the ${touch.source} signal was " +
-                "${received - touch.received}ms ahead of it",
-        )
+        val report = touches.onTouch(source, downTime, received)
+        if (report.isNewTouch) filmStrip.markTouch()
+        ProbeLog.log("E3", report.line)
     }
 
     /**
@@ -648,7 +781,7 @@ class ProbeAccessibilityService : AccessibilityService() {
             ProbeLog.log("E5", "nothing done: there is no box on screen. Open an app with a list, or re-pick.")
             return
         }
-        val boxInWindow = Rect().also { current.node.getBoundsInWindow(it) }
+        val boxInWindow = boundsInWindow(current, boxOnScreen)
         // The window's top element spans the window, so its width is the window's width.
         val root = rootInActiveWindow
         val windowWidth = if (root != null && root.windowId == current.windowId) {
@@ -659,7 +792,8 @@ class ProbeAccessibilityService : AccessibilityService() {
         val screenWidth = getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds.width()
         ProbeLog.log(
             "E5",
-            "screenshot requested: mech=${mechanism.id} box=${boxOnScreen.toShortString()} window=${current.windowId}",
+            "screenshot requested: mech=${mechanism.id} box=${boxOnScreen.toShortString()} " +
+                "boxInWindow=${boxInWindow.toShortString()} window=${current.windowId}",
         )
         screenshots.takeAndCheck(
             ScreenshotProbe.Scene(
@@ -679,8 +813,14 @@ class ProbeAccessibilityService : AccessibilityService() {
         private const val SHADE_CLOSE_MS = 800L
         private const val BOX_REDRAW_MS = 300L
         private const val TRACE_TIMEOUT_MS = 500L
-        private const val MATCH_WINDOW_MS = 5_000L
         private const val MOTION_LISTEN_MS = 10_000L
+
+        /** No scroll event for this long is taken as the end of a scroll, for the "scroll ended" line. */
+        private const val SCROLL_RUN_QUIET_MS = 400L
+
+        /** Longer gaps than these are pauses, not part of a scroll or of steady polling. */
+        private const val SCROLL_GAP_LONGEST_COUNTED_MS = 1_000L
+        private const val POLL_GAP_LONGEST_COUNTED_MS = 1_000L
         private const val MAX_SEARCH_NODES = 3_000
         private const val MIN_ITEM_HEIGHT_DP = 48
         private const val MAX_LAG_SAMPLES = 50_000
@@ -698,6 +838,11 @@ class ProbeAccessibilityService : AccessibilityService() {
         /** Makes a running service take up changed [ProbeSettings]. Does nothing if it is not running. */
         fun applySettings() {
             instance?.applySettingsNow()
+        }
+
+        /** Makes a running service bring the text of its control notification up to date. */
+        fun refreshControls() {
+            instance?.showControls()
         }
 
         /** Hands a trigger to the running service. Returns false if it is not running. */
