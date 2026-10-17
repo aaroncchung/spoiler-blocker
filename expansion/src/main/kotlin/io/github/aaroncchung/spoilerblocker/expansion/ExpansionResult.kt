@@ -52,7 +52,11 @@ enum class FailureKind(val canRetry: Boolean) {
     /** The API could not be reached: no connection, or the connection dropped. */
     NO_NETWORK(canRetry = true),
 
-    /** The connection was made but no answer came in time. */
+    /**
+     * The connection was made but no answer came in time. The API may have
+     * finished the call anyway and billed it, so trying again costs a second
+     * call.
+     */
     TIMEOUT(canRetry = true),
 
     /** The API rejected the key (HTTP 401 or 403). */

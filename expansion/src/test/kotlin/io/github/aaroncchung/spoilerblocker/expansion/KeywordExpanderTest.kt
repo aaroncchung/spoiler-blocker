@@ -390,7 +390,20 @@ class KeywordExpanderTest {
 
         val result = expand(expander = expander(httpClient = impatient))
 
-        assertFailure(FailureKind.TIMEOUT, result)
+        val failure = assertFailure(FailureKind.TIMEOUT, result)
+        // The server may still finish the reply and bill it, so a second try is not free.
+        assertEquals(
+            "The Claude API did not answer in time. It may still have finished " +
+                "the call and billed it, so trying again costs a second call.",
+            failure.message,
+        )
+    }
+
+    @Test
+    fun `the default client waits ten minutes for a reply`() {
+        // Spelled out here as well, like the values of the request above.
+        // Anthropic's own client libraries wait this long by default.
+        assertEquals(Duration.ofMinutes(10).toMillis(), defaultHttpClient().readTimeoutMillis.toLong())
     }
 
     @Test

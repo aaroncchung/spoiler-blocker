@@ -71,14 +71,19 @@ internal const val MAX_WEB_SEARCHES = 8
 internal const val MAX_CONTINUATIONS = 2
 
 // The reply is not streamed: nothing comes back until the model has finished
-// searching and writing, which can take a minute or more. So the read timeout
-// is in effect the time allowed for one whole reply. The other two are short,
-// so that a phone with no usable connection fails quickly.
+// searching and writing, which can take several minutes. So the read timeout
+// is in effect the time allowed for one whole reply. Ten minutes is what
+// Anthropic's own client libraries allow by default. Giving up sooner saves
+// nothing, because the server may finish the reply anyway and bill it, and
+// the answer is then lost. (Streaming the reply would let the timeout measure
+// the gaps between its pieces instead, but it takes more code, for a call made
+// once per blocker.) The other two are short, so that a phone with no usable
+// connection fails quickly.
 private val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(15)
 private val WRITE_TIMEOUT: Duration = Duration.ofSeconds(15)
-private val READ_TIMEOUT: Duration = Duration.ofMinutes(4)
+private val READ_TIMEOUT: Duration = Duration.ofMinutes(10)
 
-// Four minutes is a long time to wait on a connection that has died, which
+// Ten minutes is a long time to wait on a connection that has died, which
 // happens when a phone leaves its Wi-Fi. So while it waits, the client asks
 // the server this often whether it is still there (an HTTP/2 "ping"). If no
 // answer has come by the time the next ping is due, the call fails. A reply
@@ -147,7 +152,11 @@ class KeywordExpander(
                 requestTerms(description.trim(), breadth)
             } catch (e: InterruptedIOException) {
                 // OkHttp's timeouts all arrive as this type or a subclass of it.
-                Failure(FailureKind.TIMEOUT, "The Claude API did not answer in time.")
+                Failure(
+                    FailureKind.TIMEOUT,
+                    "The Claude API did not answer in time. It may still have finished " +
+                        "the call and billed it, so trying again costs a second call.",
+                )
             } catch (e: IOException) {
                 val detail = e.message ?: e.javaClass.simpleName
                 Failure(FailureKind.NO_NETWORK, "Could not reach the Claude API: $detail")
