@@ -37,7 +37,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 |---|---|
 | `app/` | The Android app. Package `io.github.aaroncchung.spoilerblocker`. |
 | `app/…/SpoilerBlockerApplication.kt` | The Application and `AppContainer`, which owns the objects shared by the whole app. |
-| `app/…/data/` | `Blocker` and `BlockerRepository`. Blockers are stored as JSON in `files/blockers.json`. |
+| `app/…/data/` | `Blocker` and `BlockerRepository`. Blockers are stored as JSON in `files/blockers.json`. A file that cannot be read is copied aside by `keepUnreadableCopy` before it is replaced, to `blockers.json.unreadable`, then `.unreadable.2` and so on. A copy is never overwritten. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. |
 | `gradle/libs.versions.toml` | Every dependency version. |
