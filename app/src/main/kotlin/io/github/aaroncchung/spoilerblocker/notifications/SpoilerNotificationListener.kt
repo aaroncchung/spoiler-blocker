@@ -54,10 +54,13 @@ import kotlinx.coroutines.launch
  *   and dismissing the summary is listed when Android reports that it has
  *   gone. That report carries a slimmed-down copy of the notification, so
  *   the entry has its title and text but not the messages of a chat.
- * - One kind of child cannot be listed. Android holds every new
- *   notification back for a moment before it shows it to anyone. A child
- *   that is still being held back when its summary is dismissed goes with
- *   the group, and no listener is ever told that it existed.
+ * - One kind of child cannot be listed. Android may hold a new
+ *   notification back for a moment before it shows it to anyone. It does
+ *   so while a notification assistant is on, such as the one that suggests
+ *   actions and replies, to give the assistant time to look at the
+ *   notification first. A child that is still being held back when its
+ *   summary is dismissed goes with the group, and no listener is ever told
+ *   that it existed.
  *
  * **What a listener cannot hide.**
  *
@@ -68,6 +71,24 @@ import kotlinx.coroutines.launch
  *   notification only takes the entry out of the notification shade. The
  *   bubble stays on screen and so does the text beside it, and nothing a
  *   listener can call removes them. It is still dismissed and listed.
+ * - Android's notification history (on One UI, under Settings ›
+ *   Notifications › Advanced settings), if it is on. It records the title
+ *   and text of a notification when it is posted, and keeps them after
+ *   this listener has dismissed it.
+ * - What other notification listeners do with it. A paired Galaxy Watch
+ *   (through Galaxy Wearable), Android Auto or Phone Link gets each
+ *   notification at the same moment as this app, so it may show it before
+ *   it is dismissed.
+ * - The alert for an update. Once this listener has dismissed a
+ *   notification, an app that updates it, such as a live score or a chat,
+ *   posts it again as a new one. FLAG_ONLY_ALERT_ONCE, which keeps an
+ *   update quiet, only covers a notification that is still showing, so
+ *   the update may sound, vibrate and show a banner again before it is
+ *   dismissed again. Snoozing the notification instead of dismissing it
+ *   might avoid that, at a cost: there is no public way to bring it back
+ *   when the blocker is switched off, and the app is not told that it went
+ *   (its deleteIntent is not sent). That needs measuring on the phone
+ *   first.
  *
  * **When something goes wrong.** A notification is put together by another
  * app, and it can be malformed in ways that make reading it throw. An
@@ -105,6 +126,12 @@ class SpoilerNotificationListener : NotificationListenerService() {
         super.onCreate()
         container = (application as SpoilerBlockerApplication).container
 
+        // No guard here, on purpose. Collecting the blockers fails if
+        // blockers.json cannot be used: a newer build wrote it, or it cannot
+        // be read and cannot be copied aside. The process then stops, as the
+        // rest of the app does on such a file (see CURRENT_VERSION in
+        // BlockerRepository.kt). Carrying on would block nothing while the
+        // owner thinks the blockers are on.
         scope.launch {
             container.blockerRepository.blockers
                 // Only the blockers that are on matter here. distinctUntilChanged
