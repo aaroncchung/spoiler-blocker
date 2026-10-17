@@ -61,6 +61,15 @@ class TermTableTest {
         yes("Suzuka", "#Suzuka2026"),
         yes("Max", "#MaxVerstappen"),
         yes("McLaren", "Mc Laren"),
+        // A short word with an "s" after capitals is not taken for a plural.
+        yes("NBA", "#NBAIsBack"),
+        yes("NFL", "#NFLIsBack"),
+        yes("UFC", "#UFCIsBack"),
+        yes("Japanese GP", "#JapaneseGPIsBack"),
+        yes("Japanese GP", "#JapaneseGPAsItHappened"),
+        // A plural with a capital after it is cut, but still found whole.
+        yes("GPs", "#GPsAndMore"),
+        no("GP", "#GPsAndMore"), // word endings are not understood, as with "podiums"
 
         // The same letters, whatever the spaces, capitals and punctuation inside.
         yes("Japanese GP", "#japanesegp"),
@@ -165,9 +174,12 @@ class TermTableTest {
         // A short term that is one part of a name with a capital inside:
         yes("You", "Watch it on YouTube"),
         yes("MC", "McLaren unveil the car"),
-        // Not these: a plural "s" after capitals stays with them.
+        // A plural "s" with a capital after it starts a short word, like "Is":
+        yes("PS", "#GPsAndMore"),
+        // Not these: a plural "s" with no letter after it stays with the capitals.
         no("PS", "Three GPs in a row"),
         no("CS", "NPCs everywhere"),
+        no("CS", "#PCs2026"),
 
         // Look-alike characters.
         yes("F1", FULL_WIDTH_F1),

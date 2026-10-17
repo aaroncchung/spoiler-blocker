@@ -118,8 +118,10 @@ private fun startsNewWord(characters: IntArray, index: Int): Boolean {
     // (' '.code is the code point of a space.)
     val next = characters.getOrElse(index + 1) { ' '.code }
     val afterNext = characters.getOrElse(index + 2) { ' '.code }
-    // "GPs", "NPCs": a single small "s" after capitals only makes a plural.
-    val isPluralS = next == 's'.code && !Character.isLowerCase(afterNext)
+    // "GPs", "NPCs", "PCs2026": a small "s" after capitals, with no letter
+    // after it, makes a plural. In "#NBAIsBack" a capital follows the "s",
+    // so the "s" belongs to the short word "Is".
+    val isPluralS = next == 's'.code && !Character.isLetter(afterNext)
     return when {
         // "Suzuka2026", "P1": a number is a word of its own. This is also why
         // "P1" (p, 1) is not found in "P10" (p, 10).

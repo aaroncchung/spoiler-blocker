@@ -112,9 +112,18 @@ class NormalisationTest {
         assertEquals(listOf("three", "gps", "in", "a", "row"), words("Three GPs in a row"))
         assertEquals(listOf("npcs"), words("NPCs"))
         assertEquals(listOf("pcs", "2026"), words("PCs2026"))
-        assertEquals(listOf("gps", "and", "more"), words("GPsAndMore"))
         // Not a plural: more small letters follow the "s", so the "T" starts a name.
         assertEquals(listOf("rb", "tsunoda"), words("#RBTsunoda"))
+    }
+
+    @Test
+    fun `an s with a letter after it is not a plural`() {
+        // A capital after the "s": the "s" belongs to a short word such as "Is" or "As".
+        assertEquals(listOf("nba", "is", "back"), words("#NBAIsBack"))
+        assertEquals(listOf("japanese", "gp", "as", "it", "happened"), words("#JapaneseGPAsItHappened"))
+        // The price: a real plural followed by a capital is cut too. "GPs" is
+        // still found, as g and ps run together.
+        assertEquals(listOf("g", "ps", "and", "more"), words("GPsAndMore"))
     }
 
     @Test
