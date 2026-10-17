@@ -1,6 +1,7 @@
 package io.github.aaroncchung.spoilerblocker.data
 
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -361,5 +362,33 @@ class BlockerRepositoryTest {
             secondCutShort,
             File(temporaryFolder.root, "blockers.json.unreadable.2").readText(),
         )
+    }
+
+    @Test
+    fun `a file that cannot be read is left alone if the copy cannot be made`() = runTest {
+        // One name in a path can be at most 255 characters long on Windows,
+        // Linux and macOS. This name is 250, so the copy's name, which adds
+        // ".unreadable", is too long and the copy cannot be made.
+        val longNamed = File(temporaryFolder.root, "b".repeat(245) + ".json")
+        val cutShort = """{"version":1,"blockers":[{"id":"race","na"""
+        longNamed.writeText(cutShort)
+        val repository = BlockerRepository({ longNamed }, this)
+
+        try {
+            repository.blockers.first()
+            fail("Reading should fail when the copy cannot be made.")
+        } catch (e: IOException) {
+            // Expected.
+        }
+        // A change reads the file first, so it fails the same way instead of
+        // writing over the file.
+        try {
+            repository.save(race)
+            fail("Changing should fail when the copy cannot be made.")
+        } catch (e: IOException) {
+            // Expected.
+        }
+
+        assertEquals(cutShort, longNamed.readText())
     }
 }
