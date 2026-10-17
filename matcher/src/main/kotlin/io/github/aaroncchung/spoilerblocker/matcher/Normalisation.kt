@@ -18,10 +18,13 @@ import java.text.Normalizer
  * - Inside a run of letters and digits, a new word starts at a capital after
  *   a small letter and wherever letters meet digits. That takes hashtags and
  *   names like "McLaren" apart.
- * - After several capitals, the last one starts a new word when a small
- *   letter follows it: "GPHighlights" is gp, highlights. Not when that small
- *   letter is an "s" with no letter after it, which makes a plural: "GPs"
- *   and "NPCs" stay whole, while "#NBAIsBack" is nba, is, back.
+ * - After several capitals, the last one is a word of its own when a small
+ *   letter follows it. It could end the capitals or start the next word, and
+ *   nothing says which: "GPHighlights" is gp, h, ighlights and "@NBAonTNT"
+ *   is nb, a, on, tnt. A term may run several words together, so "GP",
+ *   "Highlights", "NBA" and "on" are all found. Not when that small letter is
+ *   an "s" with no letter after it, which makes a plural: "GPs" and "NPCs"
+ *   stay whole, while "#NBAIsBack" is nba, i, s, back.
  * - Letters of one case run together stay one word: "#suzukacircuit" is
  *   suzukacircuit, and "#SUZUKAF1" is suzukaf, 1.
  */
@@ -168,29 +171,41 @@ private fun isLeftOut(codePoint: Int): Boolean = when (codePoint) {
 private fun startsNewWord(characters: IntArray, index: Int): Boolean {
     val previous = characters[index - 1]
     val current = characters[index]
-    // After the last character a space stands in for "nothing there".
-    // (' '.code is the code point of a space.)
-    val next = characters.getOrElse(index + 1) { ' '.code }
-    val afterNext = characters.getOrElse(index + 2) { ' '.code }
-    // "GPs", "NPCs", "PCs2026": a small "s" after capitals, with no letter
-    // after it, makes a plural. In "#NBAIsBack" a capital follows the "s",
-    // so the "s" belongs to the short word "Is".
-    val isPluralS = next == 's'.code && !Character.isLetter(afterNext)
     return when {
         // "Suzuka2026", "P1": a number is a word of its own. This is also why
         // "P1" (p, 1) is not found in "P10" (p, 10).
         Character.isDigit(previous) != Character.isDigit(current) -> true
         // "JapaneseGP": a capital after a small letter.
         Character.isLowerCase(previous) && Character.isUpperCase(current) -> true
-        // "GPHighlights": when a small letter follows the last of several
-        // capitals, that capital starts the next word. A plural is the
-        // exception, so that "GPs" stays whole.
-        Character.isUpperCase(previous) && Character.isUpperCase(current) &&
-            Character.isLowerCase(next) && !isPluralS -> true
+        // "GPHighlights", "NBAonTNT": the "H" and the "A" are words of their
+        // own, so a word starts at them and another one right after them.
+        isLastCapitalBeforeSmallLetter(characters, index) -> true
+        isLastCapitalBeforeSmallLetter(characters, index - 1) -> true
         // No spaces to go by, so every character is a word. See below.
         isWrittenWithoutSpaces(previous) || isWrittenWithoutSpaces(current) -> true
         else -> false
     }
+}
+
+/**
+ * True if the character at [index] is the last of several capitals and a
+ * small letter follows it: the "H" in "GPHighlights", the "A" in "NBAonTNT".
+ * [normalise] makes such a capital a word of its own, because it could end
+ * the capitals ("NBA", "on") or start the next word ("GP", "Highlights").
+ */
+private fun isLastCapitalBeforeSmallLetter(characters: IntArray, index: Int): Boolean {
+    // Before the first and after the last character, a space stands in for
+    // "nothing there". (' '.code is the code point of a space.)
+    val previous = characters.getOrElse(index - 1) { ' '.code }
+    val current = characters.getOrElse(index) { ' '.code }
+    val next = characters.getOrElse(index + 1) { ' '.code }
+    val afterNext = characters.getOrElse(index + 2) { ' '.code }
+    // "GPs", "NPCs", "PCs2026": a small "s" after capitals, with no letter
+    // after it, makes a plural and stays with the capitals. In "#NBAIsBack" a
+    // capital follows the "s", so the "s" belongs to the short word "Is".
+    val isPluralS = next == 's'.code && !Character.isLetter(afterNext)
+    return Character.isUpperCase(previous) && Character.isUpperCase(current) &&
+        Character.isLowerCase(next) && !isPluralS
 }
 
 /** The scripts whose words are not separated by spaces. Han is Chinese, and the kanji of Japanese. */
