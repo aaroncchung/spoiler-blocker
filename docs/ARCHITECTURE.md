@@ -107,10 +107,15 @@ has been checked. How strict this needs to be depends on Phase 0 measurements.
 ### Matching rules
 
 Terms and text are first cut into words in the same way. Everything is made
-lower case and accents are removed. Anything that is not a letter or a digit
-only separates words. Inside a hashtag or a name, a new word also starts at a
-capital after a small letter and wherever letters meet digits, so
-"#JapaneseGP2026" is the words japanese, gp, 2026.
+lower case and accents are removed, and a few letters that are more than a
+letter with an accent get their plain spelling: "ø" is read as "o", "ß" as
+"ss", "ł" as "l". Anything that is not a letter or a digit only separates
+words. Inside a hashtag or a name, a new word also starts at a capital after
+a small letter, at the last of several capitals when a small letter follows
+it, and wherever letters meet digits. So "#JapaneseGP2026" is the words
+japanese, gp, 2026, and "#GPHighlights" is gp, highlights. A small "s" with
+no letter after it makes a plural and stays with the capitals: "GPs" is one
+word, but "#NBAIsBack" is nba, is, back.
 
 A term is found in a text when the letters and digits of the term, run
 together, are the letters and digits of one or more whole words of the text
@@ -130,22 +135,31 @@ in this order, and the first that is true is the reason shown:
 - It contains one weak term and the blocker's breadth is broad.
 
 Terms are looked for in the text of a post, and sources in its channel or
-account name. For a notification, the sources are looked for in the app's
-name, the title and the names of the people who sent its messages. Two terms
-with the same letters, such as "Man U" and "Manu", count as one term.
+account name. For a notification, the sources are looked for in the parts
+that can name the sender: the app's name, the title and the expanded title,
+the small account text, the name of a group chat and the sender of each
+message. Two terms with the same letters, such as "Man U" and "Manu", count
+as one term.
 
 Known misses:
 
 - Word endings: "podium" is not found in "podiums".
-- Small letters run together: "Suzuka" is not found in "#suzukacircuit".
+- Letters of one case run together: "Suzuka" is not found in
+  "#suzukacircuit", nor "Verstappen" in "#MAXVERSTAPPEN". A term is found in
+  such a run only if it covers all of it: "Japanese GP" is found in
+  "#JAPANESEGP" but not in "#JAPANESEGPHIGHLIGHTS". In capitals, a letter in
+  front of a number is part of the run, so "#SUZUKAF1" hides both "Suzuka"
+  and "F1".
 - A number stuck to a number: "F1" is not found in "#F12026".
-- Letters such as "ø" and "ß" typed as "o" and "ss".
+- A spelling other than the one plain spelling of a letter: "Mueller" is not
+  found in "Müller", nor "Djokovic" in "Đoković".
 
 Known over-blocks, accepted because a miss costs more (decision 4):
 
 - Neighbouring words that add up to a term: "therapist" in "the rapist".
 - A short term inside a name: "You" in "YouTube".
 - A short term that is also an ordinary word: "US" in "join us".
+- A plural followed by a capital: "PS" in "#GPsAndMore".
 
 Chinese, Japanese and Thai have no spaces between words, so a term in those
 scripts is found anywhere in the text.
