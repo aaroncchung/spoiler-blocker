@@ -173,6 +173,35 @@ class EvaluationTest {
     }
 
     @Test
+    fun `the report as text for weak terms`() {
+        // Broad, so that one weak term blocks. Two weak terms are still
+        // reported as two, because that rule is tried first.
+        val report = evaluate(
+            terms.copy(breadth = Breadth.BROAD),
+            listOf(
+                Example(Label.UNRELATED, listOf("Max made the podium at the swimming gala"), line = 1),
+                Example(Label.UNRELATED, listOf("Max has a new dog"), line = 2),
+            ),
+        )
+
+        assertEquals(
+            """
+            Examples:    2 (0 related, 2 unrelated)
+            Misses:      not measured, there are no related examples
+            Over-blocks: 2 of 2 unrelated examples were blocked (100.0%)
+
+            Over-blocks
+              line 1: Max made the podium at the swimming gala
+                blocked by the weak terms "Max", "podium"
+              line 2: Max has a new dog
+                blocked by the weak term "Max", because the breadth is broad
+
+            """.trimIndent(),
+            describe(report),
+        )
+    }
+
+    @Test
     fun `the report as text when nothing went wrong`() {
         val report = evaluate(terms, listOf(blockedRelated, allowedUnrelated, allowedUnrelated))
 
