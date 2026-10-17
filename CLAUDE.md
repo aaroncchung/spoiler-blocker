@@ -19,7 +19,8 @@ The repository is public.
   `uiautomator` dumps. They contain other people's names and messages. Test
   data in the repository is written by hand.
 - Real labelled examples for the evaluation script. They go in `eval/data/`,
-  which is gitignored.
+  which is gitignored. Every `.jsonl` file outside `eval/sample/` is ignored
+  too.
 
 ## Commands
 
@@ -31,6 +32,7 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 | `./gradlew build` | Compiles everything, runs unit tests and lint. CI runs exactly this. |
 | `./gradlew :app:testDebugUnitTest` | Unit tests for the app module only. |
 | `./gradlew :matcher:test` | Unit tests for the matcher. Plain JVM, no phone needed. |
+| `./gradlew :eval:test` | Unit tests for the evaluation script. Plain JVM, no phone needed. |
 | `./gradlew -q :eval:run --args="<blocker.json> <examples.jsonl>"` | Runs the matcher over labelled examples and prints the misses and the over-blocks. Try it with the two files in `eval/sample/`. |
 | `./gradlew :expansion:test` | Unit tests for keyword expansion. They use a fake server and never call the real API. |
 | `./gradlew :expansion:run --args="\"2026 Japanese Grand Prix\" narrow"` | Makes one real, billed Claude API call and prints the three lists. Needs a key: the `ANTHROPIC_API_KEY` environment variable, or an `anthropic.apiKey=` line in `local.properties`. |
