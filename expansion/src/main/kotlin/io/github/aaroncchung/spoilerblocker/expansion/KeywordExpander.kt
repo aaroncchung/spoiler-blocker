@@ -23,6 +23,9 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.Call
+import okhttp3.Connection
+import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -151,7 +154,9 @@ class KeywordExpander(
             try {
                 requestTerms(description.trim(), breadth)
             } catch (e: InterruptedIOException) {
-                // OkHttp's timeouts all arrive as this type or a subclass of it.
+                // OkHttp's timeouts all arrive as this type or a subclass of
+                // it. post() turns one from before the connection was made
+                // into a NotConnectedException, which lands in the next branch.
                 Failure(
                     FailureKind.TIMEOUT,
                     "The Claude API did not answer in time. It may still have finished " +
@@ -252,13 +257,25 @@ class KeywordExpander(
             .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
+        val call = httpClient.newCall(request)
+        val watch = ConnectionWatch()
+        call.addEventListener(watch)
+
         // executeAsync waits for the reply without holding a thread. If this
         // coroutine is cancelled during that wait, it abandons the request.
         // Once the reply has started to arrive, reading it is not interrupted;
         // by then the whole of it is normally ready, so the reading is quick.
         // use {} closes the connection afterwards.
-        return httpClient.newCall(request).executeAsync().use { response ->
-            HttpReply(response.code, response.body.string())
+        try {
+            return call.executeAsync().use { response ->
+                HttpReply(response.code, response.body.string())
+            }
+        } catch (e: InterruptedIOException) {
+            // OkHttp reports a timeout while connecting in the same way as
+            // one while waiting for the answer. On Wi-Fi with no internet
+            // behind it, connecting is what times out, and that is no network.
+            if (!watch.connected) throw NotConnectedException(e)
+            throw e
         }
     }
 
@@ -380,6 +397,24 @@ internal fun defaultHttpClient(): OkHttpClient =
         // reported and the owner decides whether to try again.
         .retryOnConnectionFailure(false)
         .build()
+
+/**
+ * Notes whether a call got as far as a connection to the API. OkHttp calls
+ * connectionAcquired() when the call has one, whether new or reused.
+ */
+private class ConnectionWatch : EventListener() {
+    // Set on one of OkHttp's threads and read on another.
+    @Volatile
+    var connected = false
+        private set
+
+    override fun connectionAcquired(call: Call, connection: Connection) {
+        connected = true
+    }
+}
+
+/** A call that failed before it had a connection to the API. expand() reports it as no network. */
+private class NotConnectedException(cause: IOException) : IOException(cause.message, cause)
 
 // The parts of the API's replies that this code reads. Each class matches the
 // JSON field for field; @SerialName gives the JSON name where Kotlin's naming

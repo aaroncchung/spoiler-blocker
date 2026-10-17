@@ -4,11 +4,15 @@ import io.github.aaroncchung.spoilerblocker.expansion.ExpansionResult.Failure
 import io.github.aaroncchung.spoilerblocker.expansion.ExpansionResult.Success
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
+import java.net.SocketAddress
+import java.net.SocketTimeoutException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
+import javax.net.SocketFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -384,6 +388,18 @@ class KeywordExpanderTest {
     }
 
     @Test
+    fun `an attempt to connect that times out is a network failure`() {
+        // As on Wi-Fi with no internet behind it, where connecting is what
+        // times out. Java reports that as a timeout, like a slow answer.
+        val client = OkHttpClient.Builder().socketFactory(SocketsThatNeverConnect()).build()
+
+        val result = expand(expander = expander(httpClient = client))
+
+        assertFailure(FailureKind.NO_NETWORK, result)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
     fun `a server that never answers is a timeout`() {
         val impatient = OkHttpClient.Builder().readTimeout(Duration.ofMillis(300)).build()
         server.enqueue(MockResponse.Builder().onResponseStart(SocketEffect.Stall).build())
@@ -674,6 +690,30 @@ private val REPLY_WITH_WEB_SEARCH = message(
     }
     """,
 )
+
+/**
+ * Makes sockets whose attempt to connect times out, at once instead of after
+ * a wait. A real connect timeout ends in the same exception.
+ */
+private class SocketsThatNeverConnect : SocketFactory() {
+    override fun createSocket(): Socket = object : Socket() {
+        override fun connect(endpoint: SocketAddress, timeout: Int) {
+            throw SocketTimeoutException("Connect timed out")
+        }
+    }
+
+    // OkHttp only asks for a socket that is not connected yet, from the
+    // function above. These four make sockets that are already connected.
+    override fun createSocket(host: String, port: Int): Socket = throw UnsupportedOperationException()
+
+    override fun createSocket(host: String, port: Int, localHost: InetAddress, localPort: Int): Socket =
+        throw UnsupportedOperationException()
+
+    override fun createSocket(host: InetAddress, port: Int): Socket = throw UnsupportedOperationException()
+
+    override fun createSocket(host: InetAddress, port: Int, localHost: InetAddress, localPort: Int): Socket =
+        throw UnsupportedOperationException()
+}
 
 /** A paused turn ends with a search that has not been run yet. */
 private const val PAUSED_CONTENT = """

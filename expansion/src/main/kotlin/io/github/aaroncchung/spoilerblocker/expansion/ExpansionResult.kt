@@ -49,7 +49,11 @@ enum class FailureKind(val canRetry: Boolean) {
     /** No API key has been set. */
     MISSING_API_KEY(canRetry = false),
 
-    /** The API could not be reached: no connection, or the connection dropped. */
+    /**
+     * The API could not be reached: no connection, or the connection dropped.
+     * An attempt to connect that timed out is one of these, as on Wi-Fi with
+     * no internet behind it.
+     */
     NO_NETWORK(canRetry = true),
 
     /**
