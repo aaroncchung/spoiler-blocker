@@ -337,4 +337,29 @@ class BlockerRepositoryTest {
         repository.save(race)
         assertEquals(listOf(race), repository.blockers.first())
     }
+
+    @Test
+    fun `a second file that cannot be read is kept beside the first copy`() = runTest {
+        // Each repository here stands for one run of the app, as in the
+        // reload test above. The first copy may hold the only record of the
+        // blockers, so the second must not replace it.
+        val firstCutShort = """{"version":1,"blockers":[{"id":"race","na"""
+        file.writeText(firstCutShort)
+        val firstJob = Job()
+        val firstScope = CoroutineScope(StandardTestDispatcher(testScheduler) + firstJob)
+        val firstRun = BlockerRepository({ file }, firstScope)
+        assertEquals(emptyList<Blocker>(), firstRun.blockers.first())
+        firstJob.cancelAndJoin()
+
+        val secondCutShort = """{"version":1,"blockers":[{"id":"finale","na"""
+        file.writeText(secondCutShort)
+        val secondRun = BlockerRepository({ file }, this)
+
+        assertEquals(emptyList<Blocker>(), secondRun.blockers.first())
+        assertEquals(firstCutShort, unreadableCopy.readText())
+        assertEquals(
+            secondCutShort,
+            File(temporaryFolder.root, "blockers.json.unreadable.2").readText(),
+        )
+    }
 }
