@@ -65,21 +65,40 @@ is dismissed and added to a "hidden while blocking" list in the app, so you can
 see afterwards that a friend messaged you. The list conceals each entry's text
 until you tap it, because that text is the spoiler.
 
-Three limits come from Android. A notification marked as ongoing, such as a
+Some limits come from Android. A notification marked as ongoing, such as a
 media player's, cannot be dismissed by another app, so it is left alone. A
 conversation shown as a bubble cannot be hidden: dismissing it only removes its
 entry from the notification shade, and the bubble stays on screen. Text that an
 app draws in its own custom layout cannot be read, so it cannot be matched.
+Nor can the replies and actions that the system's notification assistant
+suggests, when that setting is on: they reach the app apart from the
+notification, and may come after it.
+
+Other parts of the phone see a notification too. Android's notification
+history, if it is on, records a notification's title and text when it is
+posted and keeps them after it is dismissed. Other notification listeners,
+such as a paired Galaxy Watch, Android Auto or Phone Link, get each
+notification at the same moment as this app, so they may show it before it is
+dismissed. And once a notification has been dismissed, an app that updates it,
+such as a live score or a chat, posts it again as a new one. Android then no
+longer keeps the update quiet, so it may sound, vibrate and show a banner again
+before it is dismissed again. Snoozing it instead of dismissing it might avoid
+that, but there is no public way to bring a snoozed notification back when the
+blocker is switched off, and the app is not told that it went. Experiment E4
+measures this before anything changes.
 
 Notifications in a group are each judged on their own text. When a group's
 summary matches, the whole group is dismissed, because the summary would
 otherwise be shown by itself, and each notification that went with it is
 listed.
 
-That listing has one gap. Android holds every new notification back for about
-200 ms before any app is told about it. A notification that is still being
-held when its group's summary is dismissed goes with the group, and it cannot
-be listed, because no app was ever told that it existed.
+That listing has one gap. Android may hold a new notification back for a
+moment before any app is told about it. It does so while a notification
+assistant is on, such as the one that suggests actions and replies, to give the
+assistant time to look at the notification first. On the emulator the hold is
+200 ms; on the phone it is not measured yet (E4). A notification that is still
+being held when its group's summary is dismissed goes with the group, and it
+cannot be listed, because no app was ever told that it existed.
 
 **Screen.**
 
