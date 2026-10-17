@@ -133,19 +133,68 @@ has been checked. How strict this needs to be depends on Phase 0 measurements.
 
 ### Matching rules
 
-Text is normalised first: lower case, accents removed, hashtags split so that
-"#JapaneseGP" matches "japanese gp", and whole-word matching so that "Max" does
-not match "maximum".
+Terms and text are first cut into words in the same way. Everything is made
+lower case and accents are removed, and a few letters that are more than a
+letter with an accent get their plain spelling: "ø" is read as "o", "ß" as
+"ss", "ł" as "l". Anything that is not a letter or a digit only separates
+words. Inside a hashtag or a name, a new word also starts at a capital after
+a small letter and wherever letters meet digits. The last of several
+capitals is a word of its own when a small letter follows it, because it
+could end the capitals or start the next word. So "#JapaneseGP2026" is the
+words japanese, gp, 2026, "#GPHighlights" is gp, h, ighlights and
+"@NBAonTNT" is nb, a, on, tnt. A small "s" with no letter after it makes a
+plural and stays with the capitals: "GPs" is one word, but "#NBAIsBack" is
+nba, i, s, back.
 
-A post or notification is blocked when any of these is true:
+A term is found in a text when the letters and digits of the term, run
+together, are the letters and digits of one or more whole words of the text
+that follow each other, run together.
 
-- Its channel or account is in the sources list.
+So the spaces, punctuation and capitals inside a term do not matter:
+"Japanese GP" is found in "Japanese G.P.", "#JapaneseGP" and "#japanesegp".
+Where a term starts and ends does matter: "Max" is found in "Max's lap" but
+not in "maximum".
+
+A post or notification is blocked when any of these is true. They are checked
+in this order, and the first that is true is the reason shown:
+
+- Its channel or account contains one of the blocker's sources.
 - It contains a strong term.
 - It contains two or more different weak terms.
 - It contains one weak term and the blocker's breadth is broad.
 
-There is no model in this path in v1. The rules are deliberately simple so that
-it is always possible to see why something was or was not blocked.
+Terms are looked for in the text of a post, and sources in its channel or
+account name. For a notification, the sources are looked for in the parts
+that can name the sender: the app's name, the title and the expanded title,
+the small account text, the name of a group chat and the sender of each
+message. Two terms with the same letters, such as "Man U" and "Manu", count
+as one term.
+
+Known misses:
+
+- Word endings: "podium" is not found in "podiums".
+- Letters of one case run together: "Suzuka" is not found in
+  "#suzukacircuit", nor "Verstappen" in "#MAXVERSTAPPEN". A term is found in
+  such a run only if it covers all of it: "Japanese GP" is found in
+  "#JAPANESEGP" but not in "#JAPANESEGPHIGHLIGHTS". In capitals, a letter in
+  front of a number is part of the run, so "#SUZUKAF1" hides both "Suzuka"
+  and "F1".
+- A number stuck to a number: "F1" is not found in "#F12026".
+- A spelling other than the one plain spelling of a letter: "Mueller" is not
+  found in "Müller", nor "Djokovic" in "Đoković".
+
+Known over-blocks, accepted because a miss costs more (decision 4):
+
+- Neighbouring words that add up to a term: "therapist" in "the rapist".
+- A short term inside a name: "You" in "YouTube".
+- A short term that is also an ordinary word: "US" in "join us".
+- A plural followed by a capital: "PS" in "#GPsAndMore".
+
+Chinese, Japanese and Thai have no spaces between words, so a term in those
+scripts is found anywhere in the text.
+
+There is no model in this path in v1. The rules are deliberately simple so
+that it is always possible to see why something was or was not blocked.
 
 ### Components
 

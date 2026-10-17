@@ -91,11 +91,16 @@ data class NotificationContent(
         get() = displayTitle.isBlank() && displayText.isBlank()
 
     /**
-     * The one place where a notification becomes what the matcher looks at:
-     * every part, because a spoiler can be in any of them.
+     * The one place where a notification becomes what the matcher looks at.
      *
-     * The app's name is included, as docs/ARCHITECTURE.md describes. For now
-     * it is matched like any other text.
+     * The texts are every part, because a spoiler can be in any of them.
+     *
+     * The sources are the parts that say where it came from: the app, the
+     * title and the expanded title (a chat app puts the sender or the group
+     * there, YouTube often the channel), the small account text, the name of
+     * a group chat, and the senders of its messages. A blocker's sources are
+     * looked for in these only. They are among the texts too, so a term is
+     * still found in an app's name or a title.
      */
     fun toCandidate(): Candidate {
         val texts = buildList {
@@ -117,9 +122,22 @@ data class NotificationContent(
             add(pictureDescription)
             addAll(otherTexts)
         }
+        val sources = buildList {
+            add(appName)
+            add(title)
+            add(bigTitle)
+            add(subText)
+            add(conversationTitle)
+            for (message in messages) {
+                add(message.sender)
+            }
+        }
         // The same words are often in several parts: the text is usually
         // also the start of the big text and the newest message.
-        return Candidate(texts.filter { it.isNotBlank() }.distinct())
+        return Candidate(
+            texts = texts.filter { it.isNotBlank() }.distinct(),
+            sources = sources.filter { it.isNotBlank() }.distinct(),
+        )
     }
 
     /**
@@ -177,12 +195,20 @@ internal inline fun <T> readPart(missing: T, read: () -> T): T =
     }
 
 /**
- * The term to show for a [Reason] in the hidden list.
+ * What to show for a [Reason] in the hidden list, where it completes the
+ * sentence "It contains …".
+ *
+ * A source is found in a part such as the app's name, the title or a sender,
+ * so "contains" is true of a source as well. Several weak terms are shown as
+ * one list.
  *
  * There is no `else` branch on purpose. [Reason] is a sealed interface, so
  * when the matcher gains another kind of reason this stops compiling, which
  * points at the place that has to say how the new kind is shown and stored.
  */
 private fun matchedTermOf(reason: Reason): String = when (reason) {
+    is Reason.Source -> reason.source
     is Reason.StrongTerm -> reason.term
+    is Reason.WeakTerms -> reason.terms.joinToString(", ")
+    is Reason.WeakTermBroad -> reason.term
 }
