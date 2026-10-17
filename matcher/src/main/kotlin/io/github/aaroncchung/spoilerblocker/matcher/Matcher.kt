@@ -34,6 +34,14 @@ data class BlockerTerms(
 fun hasMatchableText(term: String): Boolean = normalise(term).isNotEmpty()
 
 /**
+ * What the matcher compares when it looks for [term]: the words that
+ * [normalise] makes of it, run together. "Japanese GP", "#JapaneseGP" and
+ * "japanese-gp" all give "japanesegp", so to the matcher they are one term.
+ * It is empty exactly when [hasMatchableText] is false.
+ */
+fun matchingKey(term: String): String = normalise(term).joinToString(separator = "")
+
+/**
  * One notification or post, reduced to the pieces of text the matcher looks at.
  *
  * The two lists are kept apart. Strong and weak terms are looked for in
