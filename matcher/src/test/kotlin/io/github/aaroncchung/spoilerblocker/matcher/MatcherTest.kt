@@ -4,8 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Hand-written examples around the document's blocker for the 2026 Japanese
- * Grand Prix. None of the text comes from a real phone.
+ * Hand-written examples around the example blocker in docs/ARCHITECTURE.md,
+ * for the 2026 Japanese Grand Prix. That document lists "Max" and "podium" as
+ * weak terms; here they are strong terms, used to test how words are matched.
+ * None of the text comes from a real phone.
  */
 class MatcherTest {
 
