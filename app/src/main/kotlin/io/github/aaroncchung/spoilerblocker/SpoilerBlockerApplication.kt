@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.github.aaroncchung.spoilerblocker.data.BlockerRepository
 import io.github.aaroncchung.spoilerblocker.data.HiddenNotificationRepository
+import io.github.aaroncchung.spoilerblocker.status.StatusNotifier
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,10 @@ class SpoilerBlockerApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // Started here and not by a screen, because the process is not
+        // always started by one: after a restart of the phone Android starts
+        // it to connect the notification listener.
+        container.statusNotifier.start(container.blockerRepository.blockers, container.applicationScope)
     }
 }
 
@@ -49,6 +54,9 @@ class AppContainer(context: Context) {
             produceFile = { File(context.filesDir, "hidden_notifications.json") },
         )
     }
+
+    /** Shows the status notification while a blocker is on. */
+    val statusNotifier = StatusNotifier(context)
 
     /**
      * For work that has to finish even if the screen or service that started

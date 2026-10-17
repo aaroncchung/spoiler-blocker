@@ -37,6 +37,18 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Android tells the app about most changes that matter to the status
+        // notification: the listener hears when it is connected or
+        // disconnected, and NotificationsSwitchedReceiver when notifications
+        // are switched on or off in the system settings. Not about all of
+        // them: allowing notifications in Android's dialog, for one, sends no
+        // broadcast. When the owner comes back to the app is the time to look
+        // again, so that the status notification says the right thing.
+        (application as SpoilerBlockerApplication).container.statusNotifier.refresh()
+    }
 }
 
 // Each screen has a route: a small serializable object that names the screen

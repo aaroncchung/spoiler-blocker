@@ -25,6 +25,14 @@
     </queries>
 
     <!--
+        Needed since Android 13 to post any notification. This app posts one:
+        the status notification that shows while a blocker is on. Declaring
+        the permission only makes it possible to ask. The owner is asked on
+        the blocker list, the first time a blocker is on.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
         allowBackup is off and the extraction rules exclude everything: the app
         will hold the text of hidden notifications, which must stay on the phone.
         Both are needed, because from Android 12 allowBackup="false" stops cloud
@@ -82,6 +90,37 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!--
+            Android runs this when the owner swipes the status notification
+            away. Not exported: no other app may send to it. Android can,
+            because it uses the PendingIntent that this app handed it.
+        -->
+        <receiver
+            android:name=".status.StatusNotificationDismissedReceiver"
+            android:exported="false" />
+
+        <!--
+            Android sends these two to this app alone, when the owner switches
+            its notifications on or off, or only the channel of the status
+            notification. Because they are addressed to the app, they reach a
+            receiver declared here even while the app is not running.
+
+            Not exported: no other app may send to it, but Android can. The
+            channel broadcast goes out in the name of whatever changed the
+            setting, though. The system settings are part of Android and get
+            through. The notification shade counts as an app of its own and
+            does not. The shade can only switch the channel off, and then
+            there is nothing to put back.
+        -->
+        <receiver
+            android:name=".status.NotificationsSwitchedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.APP_BLOCK_STATE_CHANGED" />
+                <action android:name="android.app.action.NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
