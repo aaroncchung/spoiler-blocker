@@ -95,10 +95,11 @@ data class NotificationContent(
      * The texts are every part, because a spoiler can be in any of them.
      *
      * The sources are the parts that say where it came from: the app, the
-     * title (a chat app puts the sender or the group there, YouTube often the
-     * channel), the small account text, and the senders of its messages. A
-     * blocker's sources are looked for in these only. They are among the
-     * texts too, so a term is still found in an app's name or a title.
+     * title and the expanded title (a chat app puts the sender or the group
+     * there, YouTube often the channel), the small account text, the name of
+     * a group chat, and the senders of its messages. A blocker's sources are
+     * looked for in these only. They are among the texts too, so a term is
+     * still found in an app's name or a title.
      */
     fun toCandidate(): Candidate {
         val texts = buildList {
@@ -196,8 +197,9 @@ internal inline fun <T> readPart(missing: T, read: () -> T): T =
  * What to show for a [Reason] in the hidden list, where it completes the
  * sentence "It contains …".
  *
- * A source is found in the app's name, the title or a sender, so "contains"
- * is true of a source as well. Several weak terms are shown as one list.
+ * A source is found in a part such as the app's name, the title or a sender,
+ * so "contains" is true of a source as well. Several weak terms are shown as
+ * one list.
  *
  * There is no `else` branch on purpose. [Reason] is a sealed interface, so
  * when the matcher gains another kind of reason this stops compiling, which

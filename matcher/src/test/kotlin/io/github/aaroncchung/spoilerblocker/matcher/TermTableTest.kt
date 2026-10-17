@@ -121,6 +121,17 @@ class TermTableTest {
         // Known limit: small letters run together give no hint where a word ends.
         no("Japanese GP", "#japanesegphighlights"),
         no("Suzuka", "#suzukacircuit"),
+        // Known limit: nor do capitals run together. A term is found in them
+        // only if it covers the whole run, as "#JAPANESEGP" above.
+        no("Japanese GP", "#JAPANESEGPHIGHLIGHTS"),
+        no("Suzuka", "#SUZUKACIRCUIT"),
+        no("Verstappen", "#MAXVERSTAPPEN"),
+        yes("Max Verstappen", "#MAXVERSTAPPEN"),
+        // A capital in front of a number is part of the run: "#SUZUKAF1" is suzukaf, 1.
+        no("Suzuka", "#SUZUKAF1"),
+        no("F1", "#SUZUKAF1"),
+        no("Haas", "#HAASF1"),
+        yes("Suzuka F1", "#SUZUKAF1"),
 
         // Possessives and punctuation.
         yes("Max", "Max's lap"),
@@ -229,6 +240,7 @@ class TermTableTest {
         yes("Ολυμπιακός Πειραιώς", "#ΟΛΥΜΠΙΑΚΟΣΠΕΙΡΑΙΩΣ"),
         yes("Ολυμπιακός FC", "#ΟΛΥΜΠΙΑΚΟΣFC"),
         yes("Ολυμπιακός", "ολυμπιακοσ"), // typed with the wrong "s" at the end
+        no("Ολυμπιακός", "#ΟΛΥΜΠΙΑΚΟΣFC"), // known limit: capitals run together, as above
     )
 
     @Test

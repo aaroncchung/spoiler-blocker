@@ -18,6 +18,12 @@ import java.text.Normalizer
  * - Inside a run of letters and digits, a new word starts at a capital after
  *   a small letter and wherever letters meet digits. That takes hashtags and
  *   names like "McLaren" apart.
+ * - After several capitals, the last one starts a new word when a small
+ *   letter follows it: "GPHighlights" is gp, highlights. Not when that small
+ *   letter is an "s" with no letter after it, which makes a plural: "GPs"
+ *   and "NPCs" stay whole, while "#NBAIsBack" is nba, is, back.
+ * - Letters of one case run together stay one word: "#suzukacircuit" is
+ *   suzukacircuit, and "#SUZUKAF1" is suzukaf, 1.
  */
 internal fun normalise(text: String): List<String> {
     val characters = charactersToCompare(text)
@@ -176,8 +182,9 @@ private fun startsNewWord(characters: IntArray, index: Int): Boolean {
         Character.isDigit(previous) != Character.isDigit(current) -> true
         // "JapaneseGP": a capital after a small letter.
         Character.isLowerCase(previous) && Character.isUpperCase(current) -> true
-        // "GPHighlights": the last of several capitals belongs to the word
-        // that follows. A plural is the exception, so that "GPs" stays whole.
+        // "GPHighlights": when a small letter follows the last of several
+        // capitals, that capital starts the next word. A plural is the
+        // exception, so that "GPs" stays whole.
         Character.isUpperCase(previous) && Character.isUpperCase(current) &&
             Character.isLowerCase(next) && !isPluralS -> true
         // No spaces to go by, so every character is a word. See below.

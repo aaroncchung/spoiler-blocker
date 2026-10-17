@@ -147,6 +147,10 @@ class NormalisationTest {
     fun `capitals without small letters are one word`() {
         assertEquals(listOf("suzuka"), words("SUZUKA"))
         assertEquals(listOf("formula"), words("FORMULA"))
+        // Known limits: nothing says where one name ends and the next starts,
+        assertEquals(listOf("maxverstappen"), words("#MAXVERSTAPPEN"))
+        // and a capital in front of a number stays with the capitals before it.
+        assertEquals(listOf("suzukaf", "1"), words("#SUZUKAF1"))
     }
 
     @Test
