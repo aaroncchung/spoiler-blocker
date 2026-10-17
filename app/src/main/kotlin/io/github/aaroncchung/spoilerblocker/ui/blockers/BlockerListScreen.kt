@@ -57,7 +57,8 @@ import io.github.aaroncchung.spoilerblocker.notifications.requestListenerRebindI
 import io.github.aaroncchung.spoilerblocker.status.PostPermissionRequest
 import io.github.aaroncchung.spoilerblocker.status.PostPermissionStep
 import io.github.aaroncchung.spoilerblocker.status.canPostNotifications
-import io.github.aaroncchung.spoilerblocker.status.openAppNotificationSettings
+import io.github.aaroncchung.spoilerblocker.status.isStatusChannelBlocked
+import io.github.aaroncchung.spoilerblocker.status.openStatusNotificationSettings
 import io.github.aaroncchung.spoilerblocker.status.postPermissionStep
 import io.github.aaroncchung.spoilerblocker.status.wasPostPermissionRefused
 import io.github.aaroncchung.spoilerblocker.ui.theme.SpoilerBlockerTheme
@@ -79,19 +80,22 @@ fun BlockerListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Notification access is given and taken away in the system settings, and
-    // Android does not tell the app when it changes. So it is checked each
+    // nothing tells this screen when it changes. So it is checked each
     // time the app comes to the front, which includes coming back from the
     // settings screen that the card's button opens.
-    // The same goes for the permission to post notifications.
+    // The same goes for the permission to post notifications and for the
+    // channel of the status notification.
     val context = LocalContext.current
     // The screen is only ever shown by MainActivity, so there is an activity.
     val activity = checkNotNull(LocalActivity.current)
     var hasNotificationAccess by remember { mutableStateOf(isNotificationAccessGranted(context)) }
     var mayPost by remember { mutableStateOf(canPostNotifications(context)) }
+    var statusChannelBlocked by remember { mutableStateOf(isStatusChannelBlocked(context)) }
     var refusedToPost by remember { mutableStateOf(wasPostPermissionRefused(activity)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         hasNotificationAccess = isNotificationAccessGranted(context)
         mayPost = canPostNotifications(context)
+        statusChannelBlocked = isStatusChannelBlocked(context)
         refusedToPost = wasPostPermissionRefused(activity)
         requestListenerRebindIfDisconnected(context)
     }
@@ -111,6 +115,7 @@ fun BlockerListScreen(
     val permissionStep = postPermissionStep(
         blockerOn = anyBlockerOn,
         canPost = mayPost,
+        statusChannelBlocked = statusChannelBlocked,
         refusedBefore = refusedToPost,
         request = permissionRequest,
     )
@@ -132,7 +137,7 @@ fun BlockerListScreen(
         onOpenEditor = onOpenEditor,
         onOpenHiddenList = onOpenHiddenList,
         onOpenNotificationAccess = { openNotificationAccessSettings(context) },
-        onOpenNotificationSettings = { openAppNotificationSettings(context) },
+        onOpenNotificationSettings = { openStatusNotificationSettings(context) },
         onEnabledChange = viewModel::setEnabled,
     )
 }

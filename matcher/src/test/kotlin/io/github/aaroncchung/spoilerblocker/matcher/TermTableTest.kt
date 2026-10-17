@@ -49,8 +49,20 @@ class TermTableTest {
         yes("Perez", "Pe${COMBINING_ACUTE_ACCENT}rez spins"), // "e" followed by a separate accent character
         yes("Hulkenberg", "Hülkenberg in the points"),
         yes("İstanbul", "ISTANBUL PARK"), // Turkish capital dotted I
-        no("Ødegaard", "Odegaard scores"), // known limit: "ø" is a letter of its own
-        no("Diyarbakır", "DIYARBAKIR"), // known limit: so is the Turkish dotless "ı"
+        no("Mueller", "Müller scores"), // known limit: an accent is dropped, not spelled out
+
+        // Letters that are more than a letter with an accent, both ways round.
+        yes("Ødegaard", "Odegaard scores"),
+        yes("Odegaard", "ØDEGAARD SCORES"),
+        yes("Lukasz", "Łukasz saves it"),
+        yes("Łukasz", "LUKASZ"),
+        yes("Strasse", "Straße closed"),
+        yes("Straße", "STRASSE"),
+        yes("Diyarbakır", "DIYARBAKIR"), // Turkish dotless "ı"
+        yes("Diyarbakir", "Diyarbakır"),
+        yes("Gudmundsson", "Guðmundsson"),
+        yes("Aegir", "Ægir"),
+        no("Djokovic", "Đoković wins"), // known limit: "đ" is read as "d", not "dj"
 
         // Hashtags and capitals inside a word.
         yes("Japanese GP", "#JapaneseGP"),
@@ -61,6 +73,15 @@ class TermTableTest {
         yes("Suzuka", "#Suzuka2026"),
         yes("Max", "#MaxVerstappen"),
         yes("McLaren", "Mc Laren"),
+        // A short word with an "s" after capitals is not taken for a plural.
+        yes("NBA", "#NBAIsBack"),
+        yes("NFL", "#NFLIsBack"),
+        yes("UFC", "#UFCIsBack"),
+        yes("Japanese GP", "#JapaneseGPIsBack"),
+        yes("Japanese GP", "#JapaneseGPAsItHappened"),
+        // A plural with a capital after it is cut, but still found whole.
+        yes("GPs", "#GPsAndMore"),
+        no("GP", "#GPsAndMore"), // word endings are not understood, as with "podiums"
 
         // The same letters, whatever the spaces, capitals and punctuation inside.
         yes("Japanese GP", "#japanesegp"),
@@ -100,6 +121,17 @@ class TermTableTest {
         // Known limit: small letters run together give no hint where a word ends.
         no("Japanese GP", "#japanesegphighlights"),
         no("Suzuka", "#suzukacircuit"),
+        // Known limit: nor do capitals run together. A term is found in them
+        // only if it covers the whole run, as "#JAPANESEGP" above.
+        no("Japanese GP", "#JAPANESEGPHIGHLIGHTS"),
+        no("Suzuka", "#SUZUKACIRCUIT"),
+        no("Verstappen", "#MAXVERSTAPPEN"),
+        yes("Max Verstappen", "#MAXVERSTAPPEN"),
+        // A capital in front of a number is part of the run: "#SUZUKAF1" is suzukaf, 1.
+        no("Suzuka", "#SUZUKAF1"),
+        no("F1", "#SUZUKAF1"),
+        no("Haas", "#HAASF1"),
+        yes("Suzuka F1", "#SUZUKAF1"),
 
         // Possessives and punctuation.
         yes("Max", "Max's lap"),
@@ -165,9 +197,12 @@ class TermTableTest {
         // A short term that is one part of a name with a capital inside:
         yes("You", "Watch it on YouTube"),
         yes("MC", "McLaren unveil the car"),
-        // Not these: a plural "s" after capitals stays with them.
+        // A plural "s" with a capital after it starts a short word, like "Is":
+        yes("PS", "#GPsAndMore"),
+        // Not these: a plural "s" with no letter after it stays with the capitals.
         no("PS", "Three GPs in a row"),
         no("CS", "NPCs everywhere"),
+        no("CS", "#PCs2026"),
 
         // Look-alike characters.
         yes("F1", FULL_WIDTH_F1),
@@ -198,10 +233,14 @@ class TermTableTest {
         // end of a noun. "Suzuka" is missed in "at Suzuka".
         no("스즈카", "스즈카에서 열린 결승"),
 
-        // Known limit: Greek writes "s" differently at the end of a word, and
-        // lower-casing capitals run together cannot know where the first word ended.
+        // Greek writes "s" as "ς" at the end of a word and as "σ" elsewhere.
+        // They count as one letter, so a term is found where its words are
+        // run together and the "ς" has become a "σ".
         yes("Ολυμπιακός Πειραιώς", "ΟΛΥΜΠΙΑΚΟΣ ΠΕΙΡΑΙΩΣ"),
-        no("Ολυμπιακός Πειραιώς", "#ΟΛΥΜΠΙΑΚΟΣΠΕΙΡΑΙΩΣ"),
+        yes("Ολυμπιακός Πειραιώς", "#ΟΛΥΜΠΙΑΚΟΣΠΕΙΡΑΙΩΣ"),
+        yes("Ολυμπιακός FC", "#ΟΛΥΜΠΙΑΚΟΣFC"),
+        yes("Ολυμπιακός", "ολυμπιακοσ"), // typed with the wrong "s" at the end
+        no("Ολυμπιακός", "#ΟΛΥΜΠΙΑΚΟΣFC"), // known limit: capitals run together, as above
     )
 
     @Test

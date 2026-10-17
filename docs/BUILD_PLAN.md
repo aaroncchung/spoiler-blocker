@@ -29,7 +29,7 @@ thrown away.
 | E1 | What text do YouTube and Instagram expose, and can it be grouped into posts? | Run `adb shell uiautomator dump` on each screen: YouTube home, search, watch page, Shorts; Instagram feed, Explore, Reels, Stories, messages. No code needed. |
 | E2 | How far does a box lag behind a scrolling post? | A probe app whose accessibility service draws a box over one list item and logs event times. Film it in slow motion. |
 | E3 | Can the start of a scroll be detected before new content is visible? | Same probe app. Compare touch-down time with the first scroll event. |
-| E4 | Does a notification banner show before it can be dismissed? | A probe notification listener that dismisses everything from one test app. |
+| E4 | Does a notification banner show before it can be dismissed? Does an update to a dismissed notification sound, vibrate or show a banner again, and does snoozing it instead of dismissing it avoid that? Does Android hold new notifications back for about 200 ms on the S25? | A probe notification listener that dismisses everything from one test app. The test app posts a notification and then updates it with FLAG_ONLY_ALERT_ONCE set. Run once dismissing and once snoozing. Compare each notification's post time with when the listener receives it, with suggested actions and replies on and off. |
 | E5 | Does a per-window screenshot leave out the app's own black boxes? | Same probe app. Only matters for thumbnail scanning later, but it is cheap to check now. |
 | E6 | Does One UI stop the service? | Leave the probe running overnight, once with battery set to Unrestricted and once without. |
 

@@ -116,4 +116,23 @@ class BlockerListViewModelTest {
 
         assertEquals(2, viewModel.uiState.value.hiddenCount)
     }
+
+    @Test
+    fun `a hidden list that cannot be read still lets the blockers show`() = runTest {
+        val repository = newRepository()
+        repository.save(race)
+        // A hidden list written by a newer build, which this build refuses.
+        File(temporaryFolder.root, "hidden_notifications.json")
+            .writeText("""{"version":2,"notifications":[]}""")
+        val viewModel = BlockerListViewModel(repository, newHiddenRepository())
+
+        backgroundScope.launch { viewModel.uiState.collect { } }
+        advanceUntilIdle()
+
+        // runTest also fails the test if the refusal escaped as a crash.
+        assertEquals(
+            BlockerListUiState(isLoading = false, blockers = listOf(race), hiddenCount = 0),
+            viewModel.uiState.value,
+        )
+    }
 }

@@ -52,8 +52,10 @@ fun matchingKey(term: String): String = normalise(term).joinToString(separator =
  * @property texts Separate pieces of text, such as a title and a caption. A
  *   term must be found within one piece; it cannot start in one and finish in
  *   the next.
- * @property sources Where it came from: channel or account name; for a
- *   notification, the app name and the title.
+ * @property sources Where it came from: a channel or account name. For a
+ *   notification, the parts that can name the sender: the app's name, the
+ *   title and the expanded title, the small account text, the name of a
+ *   group chat and the sender of each message.
  */
 data class Candidate(
     val texts: List<String>,
@@ -108,10 +110,15 @@ sealed interface Reason {
  * > together, are the letters and digits of one or more whole words of the
  * > text that follow each other, run together.
  *
- * Upper and lower case are the same and accents are ignored. Anything that is
+ * Upper and lower case are the same and accents are ignored. A few letters
+ * that are more than a letter with an accent count as their plain spelling:
+ * "Odegaard" is found in "Ødegaard", "Strasse" in "Straße". Anything that is
  * not a letter or a digit separates words. Inside a hashtag or a name, a new
- * word also starts at a capital after a small letter and wherever letters
- * meet digits: "#JapaneseGP2026" is the words japanese, gp, 2026.
+ * word also starts at a capital after a small letter, at the last of several
+ * capitals when a small letter follows it, and wherever letters meet digits:
+ * "#JapaneseGP2026" is the words japanese, gp, 2026, and "#GPHighlights" is
+ * gp, highlights. A small "s" with no letter after it makes a plural and
+ * stays with the capitals: "GPs" is one word.
  *
  * So the spaces, punctuation and capitals inside a term do not matter. The
  * term "Japanese GP" is found in "Japanese G.P.", "#JapaneseGP",
@@ -123,12 +130,18 @@ sealed interface Reason {
  * What it does not do:
  *
  * - It knows nothing about word endings: "podium" is not found in "podiums".
- * - It cannot tell where words start inside small letters that are run
- *   together: "Suzuka" is not found in "#suzukacircuit".
+ * - It cannot tell where words start inside letters of one case that are run
+ *   together. "Suzuka" is not found in "#suzukacircuit", nor "Verstappen" in
+ *   "#MAXVERSTAPPEN". In capitals a letter in front of a number is part of
+ *   the run: "#SUZUKAF1" is the words suzukaf and 1, so neither "Suzuka" nor
+ *   "F1" is found there. A run like that is one word, and a term never starts
+ *   or ends inside a word: "Japanese GP" is found in "#JAPANESEGP" and
+ *   "#JAPANESEGP2026", but not in "#JAPANESEGPHIGHLIGHTS".
  * - It cannot tell where a number ends: "F1" is not found in "#F12026", which
  *   is the words f and 12026.
- * - Letters that are more than a plain letter with an accent stay different
- *   letters: "ø" is not "o", "ß" is not "ss", the Turkish "ı" is not "i".
+ * - Each letter has one plain spelling, and other spellings do not match it:
+ *   "Mueller" is not found in "Müller" (muller), nor "Djokovic" in "Đoković"
+ *   (dokovic).
  *
  * What it does too much of. These are accepted, because a miss costs more
  * than an over-block (decision 4 in docs/ARCHITECTURE.md):

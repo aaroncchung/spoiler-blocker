@@ -72,29 +72,56 @@ is dismissed and added to a "hidden while blocking" list in the app, so you can
 see afterwards that a friend messaged you. The list conceals each entry's text
 until you tap it, because that text is the spoiler.
 
-Three limits come from Android. A notification marked as ongoing, such as a
+Some limits come from Android. A notification marked as ongoing, such as a
 media player's, cannot be dismissed by another app, so it is left alone. A
 conversation shown as a bubble cannot be hidden: dismissing it only removes its
 entry from the notification shade, and the bubble stays on screen. Text that an
 app draws in its own custom layout cannot be read, so it cannot be matched.
+Nor can the replies and actions that the system's notification assistant
+suggests, when that setting is on: they reach the app apart from the
+notification, and may come after it.
+
+Other parts of the phone see a notification too. Android's notification
+history, if it is on, records a notification's title and text when it is
+posted and keeps them after it is dismissed. Other notification listeners,
+such as a paired Galaxy Watch, Android Auto or Phone Link, get each
+notification at the same moment as this app, so they may show it before it is
+dismissed. And once a notification has been dismissed, an app that updates it,
+such as a live score or a chat, posts it again as a new one. Android then no
+longer keeps the update quiet, so it may sound, vibrate and show a banner again
+before it is dismissed again. Snoozing it instead of dismissing it might avoid
+that, but there is no public way to bring a snoozed notification back when the
+blocker is switched off, and the app is not told that it went. Experiment E4
+measures this before anything changes.
 
 Notifications in a group are each judged on their own text. When a group's
 summary matches, the whole group is dismissed, because the summary would
 otherwise be shown by itself, and each notification that went with it is
 listed.
 
-That listing has one gap. Android holds every new notification back for about
-200 ms before any app is told about it. A notification that is still being
-held when its group's summary is dismissed goes with the group, and it cannot
-be listed, because no app was ever told that it existed.
+That listing has one gap. Android may hold a new notification back for a
+moment before any app is told about it. It does so while a notification
+assistant is on, such as the one that suggests actions and replies, to give the
+assistant time to look at the notification first. On the emulator the hold is
+200 ms; on the phone it is not measured yet (E4). A notification that is still
+being held when its group's summary is dismissed goes with the group, and it
+cannot be listed, because no app was ever told that it existed.
 
 **Status.** While any blocker is on, a silent notification names the blockers
 that are on, so that a forgotten one stays visible. If notifications are not
-actually being hidden, because notification access is off, it says that
-instead. Swiped away, it comes back. Nothing extra keeps it there: Android
-itself keeps the notification listener running and starts it again after the
-phone restarts. Without notification access it only comes back when the app is
-opened.
+actually being hidden, it says that instead: when notification access is off,
+or when access is on but Android has not connected the notification listener.
+For the first ten seconds after the app's process starts, while Android is
+still connecting the listener, a missing listener is not warned about and the
+notification is left as it is. Swiped away, it comes back. Switched off in the
+system settings, for the whole app or only its "Blocking status" channel, it
+comes back when switched on again, and the blocker list shows a card while it
+is off. Nothing extra keeps it there: Android itself keeps the notification
+listener running and starts it again after the phone restarts. Without
+notification access it only comes back when the app is opened. While the
+process is not running, for example after Android ended it to free memory,
+nothing can update the notification, so it can say a blocker is on while
+nothing is hidden until Android starts the process again.
 
 **Screen.**
 
@@ -114,10 +141,15 @@ has been checked. How strict this needs to be depends on Phase 0 measurements.
 ### Matching rules
 
 Terms and text are first cut into words in the same way. Everything is made
-lower case and accents are removed. Anything that is not a letter or a digit
-only separates words. Inside a hashtag or a name, a new word also starts at a
-capital after a small letter and wherever letters meet digits, so
-"#JapaneseGP2026" is the words japanese, gp, 2026.
+lower case and accents are removed, and a few letters that are more than a
+letter with an accent get their plain spelling: "ø" is read as "o", "ß" as
+"ss", "ł" as "l". Anything that is not a letter or a digit only separates
+words. Inside a hashtag or a name, a new word also starts at a capital after
+a small letter, at the last of several capitals when a small letter follows
+it, and wherever letters meet digits. So "#JapaneseGP2026" is the words
+japanese, gp, 2026, and "#GPHighlights" is gp, highlights. A small "s" with
+no letter after it makes a plural and stays with the capitals: "GPs" is one
+word, but "#NBAIsBack" is nba, is, back.
 
 A term is found in a text when the letters and digits of the term, run
 together, are the letters and digits of one or more whole words of the text
@@ -137,22 +169,31 @@ in this order, and the first that is true is the reason shown:
 - It contains one weak term and the blocker's breadth is broad.
 
 Terms are looked for in the text of a post, and sources in its channel or
-account name. For a notification, the sources are looked for in the app's
-name, the title and the names of the people who sent its messages. Two terms
-with the same letters, such as "Man U" and "Manu", count as one term.
+account name. For a notification, the sources are looked for in the parts
+that can name the sender: the app's name, the title and the expanded title,
+the small account text, the name of a group chat and the sender of each
+message. Two terms with the same letters, such as "Man U" and "Manu", count
+as one term.
 
 Known misses:
 
 - Word endings: "podium" is not found in "podiums".
-- Small letters run together: "Suzuka" is not found in "#suzukacircuit".
+- Letters of one case run together: "Suzuka" is not found in
+  "#suzukacircuit", nor "Verstappen" in "#MAXVERSTAPPEN". A term is found in
+  such a run only if it covers all of it: "Japanese GP" is found in
+  "#JAPANESEGP" but not in "#JAPANESEGPHIGHLIGHTS". In capitals, a letter in
+  front of a number is part of the run, so "#SUZUKAF1" hides both "Suzuka"
+  and "F1".
 - A number stuck to a number: "F1" is not found in "#F12026".
-- Letters such as "ø" and "ß" typed as "o" and "ss".
+- A spelling other than the one plain spelling of a letter: "Mueller" is not
+  found in "Müller", nor "Djokovic" in "Đoković".
 
 Known over-blocks, accepted because a miss costs more (decision 4):
 
 - Neighbouring words that add up to a term: "therapist" in "the rapist".
 - A short term inside a name: "You" in "YouTube".
 - A short term that is also an ordinary word: "US" in "join us".
+- A plural followed by a capital: "PS" in "#GPsAndMore".
 
 Chinese, Japanese and Thai have no spaces between words, so a term in those
 scripts is found anywhere in the text.
@@ -187,7 +228,7 @@ that it is always possible to see why something was or was not blocked.
 | 9 | Terms are split into strong, weak and sources. | Proposed | Sources catch posts whose text gives nothing away. The weak tier stops common words from over-blocking. |
 | 10 | Only apps on a watch list are read. v1 watches YouTube, then Instagram. | Proposed | The service never sees banking or other apps, and it costs no battery elsewhere. |
 | 11 | Fail closed: cover while scrolling, reveal after checking. | Confirmed as the intent. Exact behaviour needs experiment. | Overlay position updates arrive late, so a box cannot reliably follow a moving post. |
-| 12 | A blocker stays on until switched off. | Confirmed | Owner's requirement. A status notification makes a forgotten blocker visible. |
+| 12 | A blocker stays on until switched off. | Confirmed | Owner's requirement. A status notification makes a forgotten blocker visible, and says when nothing is being hidden. |
 | 13 | Dismissed notifications are listed in the app. | Proposed | Silently losing a friend's message is worse than seeing later that one was hidden. |
 | 14 | The matcher is a separate plain-Kotlin module. | Proposed | It can be unit-tested on a PC without a phone or YouTube. |
 | 15 | No screen text is stored or sent anywhere in normal use. | Proposed | The service can read private content. Debug capture is opt-in, stays on the phone and is never committed. |

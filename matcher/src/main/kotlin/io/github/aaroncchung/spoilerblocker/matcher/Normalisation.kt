@@ -9,13 +9,21 @@ import java.text.Normalizer
  * "Pérez wins the #JapaneseGP2026!" becomes perez, wins, the, japanese, gp,
  * 2026:
  *
- * - Everything is lower case and accents are removed.
+ * - Everything is lower case and accents are removed. A few letters that
+ *   are more than a plain letter with an accent get their plain spelling:
+ *   "Ødegaard" is odegaard, "Straße" is strasse.
  * - Anything that is not a letter or a digit only separates words and is
  *   then forgotten: spaces, punctuation, "#", "@", "_", emoji. The apostrophe
  *   too, so "Max's" is max, s.
  * - Inside a run of letters and digits, a new word starts at a capital after
  *   a small letter and wherever letters meet digits. That takes hashtags and
  *   names like "McLaren" apart.
+ * - After several capitals, the last one starts a new word when a small
+ *   letter follows it: "GPHighlights" is gp, highlights. Not when that small
+ *   letter is an "s" with no letter after it, which makes a plural: "GPs"
+ *   and "NPCs" stay whole, while "#NBAIsBack" is nba, is, back.
+ * - Letters of one case run together stay one word: "#suzukacircuit" is
+ *   suzukacircuit, and "#SUZUKAF1" is suzukaf, 1.
  */
 internal fun normalise(text: String): List<String> {
     val characters = charactersToCompare(text)
@@ -27,14 +35,59 @@ internal fun normalise(text: String): List<String> {
         // The word so far is finished if this character is a separator, or if
         // it is the first character of the next word.
         if (word.isNotEmpty() && (!isPartOfAWord || startsNewWord(characters, index))) {
-            // Lower case comes last, because the capitals say where to cut.
-            words += word.toString().lowercase()
+            words += finished(word)
             word.clear()
         }
         if (isPartOfAWord) word.appendCodePoint(character)
     }
-    if (word.isNotEmpty()) words += word.toString().lowercase()
+    if (word.isNotEmpty()) words += finished(word)
     return words
+}
+
+/**
+ * A word that [normalise] has cut out, in the form that is compared. Lower
+ * case comes only now, because the capitals said where to cut. The plain
+ * spellings come after lower case, so their table needs only small letters.
+ */
+private fun finished(word: CharSequence): String = withPlainSpellings(word.toString().lowercase())
+
+/** [word] with every letter from [plainSpellingOf] replaced by its plain spelling. */
+private fun withPlainSpellings(word: String): String {
+    // Most words have none of these letters and need no new string.
+    if (word.all { plainSpellingOf(it) == null }) return word
+    return buildString {
+        for (character in word) {
+            val plain = plainSpellingOf(character)
+            if (plain == null) append(character) else append(plain)
+        }
+    }
+}
+
+/**
+ * The plain spelling of a small letter that is more than a plain letter with
+ * an accent, or null for any other character. NFKD leaves these letters as
+ * they are, so without this "Odegaard" would not find "Ødegaard". Each is
+ * spelled the way English text usually writes it.
+ */
+private fun plainSpellingOf(letter: Char): String? = when (letter) {
+    'ø' -> "o" // Danish and Norwegian: Ødegaard
+    'ł' -> "l" // Polish: Łukasz
+    // Croatian and Vietnamese. English writes some Serbian names with "dj",
+    // which this does not give: "Djokovic" is still not found in "Đoković".
+    'đ' -> "d"
+    'ð' -> "d" // Icelandic
+    'ħ' -> "h" // Maltese
+    'ŧ' -> "t" // Northern Sami
+    'ı' -> "i" // Turkish dotless i: Diyarbakır
+    'ß' -> "ss" // German: Straße
+    'æ' -> "ae"
+    'œ' -> "oe"
+    'þ' -> "th" // Icelandic
+    // Greek writes "s" as "ς" at the end of a word and as "σ" elsewhere.
+    // Where words are run together, as in a hashtag, the last "s" of a word
+    // is no longer at the end and is written "σ". So the two are one letter.
+    'ς' -> "σ"
+    else -> null
 }
 
 /**
@@ -47,8 +100,9 @@ internal fun normalise(text: String): List<String> {
  * ordinary ones: full-width letters, the single character for "fi", the bold
  * letters some posts use as decoration.
  *
- * Letters that are more than a plain letter with an accent stay as they are:
- * "ø" is not turned into "o", nor "ß" into "ss".
+ * Letters that are more than a plain letter with an accent stay as they are
+ * here: NFKD does not turn "ø" into "o", nor "ß" into "ss". [normalise] gives
+ * them their plain spelling later, with [plainSpellingOf].
  *
  * In scripts such as Thai, Hindi and Japanese some vowels and sound marks are
  * accents too, and they are left out as well. Terms and texts lose the same
@@ -118,16 +172,19 @@ private fun startsNewWord(characters: IntArray, index: Int): Boolean {
     // (' '.code is the code point of a space.)
     val next = characters.getOrElse(index + 1) { ' '.code }
     val afterNext = characters.getOrElse(index + 2) { ' '.code }
-    // "GPs", "NPCs": a single small "s" after capitals only makes a plural.
-    val isPluralS = next == 's'.code && !Character.isLowerCase(afterNext)
+    // "GPs", "NPCs", "PCs2026": a small "s" after capitals, with no letter
+    // after it, makes a plural. In "#NBAIsBack" a capital follows the "s",
+    // so the "s" belongs to the short word "Is".
+    val isPluralS = next == 's'.code && !Character.isLetter(afterNext)
     return when {
         // "Suzuka2026", "P1": a number is a word of its own. This is also why
         // "P1" (p, 1) is not found in "P10" (p, 10).
         Character.isDigit(previous) != Character.isDigit(current) -> true
         // "JapaneseGP": a capital after a small letter.
         Character.isLowerCase(previous) && Character.isUpperCase(current) -> true
-        // "GPHighlights": the last of several capitals belongs to the word
-        // that follows. A plural is the exception, so that "GPs" stays whole.
+        // "GPHighlights": when a small letter follows the last of several
+        // capitals, that capital starts the next word. A plural is the
+        // exception, so that "GPs" stays whole.
         Character.isUpperCase(previous) && Character.isUpperCase(current) &&
             Character.isLowerCase(next) && !isPluralS -> true
         // No spaces to go by, so every character is a word. See below.
