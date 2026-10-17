@@ -118,10 +118,21 @@ class NormalisationTest {
     @Test
     fun `a new word starts at a capital letter`() {
         assertEquals(listOf("japanese", "gp"), words("#JapaneseGP"))
-        assertEquals(listOf("japanese", "gp", "highlights"), words("JapaneseGPHighlights"))
         assertEquals(listOf("mc", "laren"), words("McLaren"))
         assertEquals(listOf("i", "phone"), words("iPhone"))
-        assertEquals(listOf("nba", "finals"), words("#NBAFinals"))
+    }
+
+    @Test
+    fun `the last of several capitals before a small letter is a word of its own`() {
+        // It may start the next word,
+        assertEquals(listOf("japanese", "gp", "h", "ighlights"), words("JapaneseGPHighlights"))
+        assertEquals(listOf("nba", "f", "inals"), words("#NBAFinals"))
+        // or end the capitals.
+        assertEquals(listOf("nb", "a", "on", "tnt"), words("@NBAonTNT"))
+        assertEquals(listOf("esp", "n", "cricinfo"), words("@ESPNcricinfo"))
+        assertEquals(listOf("ma", "x", "verstappen"), words("#MAXverstappen"))
+        // With two capitals, the first one is a word of its own too.
+        assertEquals(listOf("g", "p", "winner"), words("#GPwinner"))
     }
 
     @Test
@@ -130,17 +141,17 @@ class NormalisationTest {
         assertEquals(listOf("npcs"), words("NPCs"))
         assertEquals(listOf("pcs", "2026"), words("PCs2026"))
         // Not a plural: more small letters follow the "s", so the "T" starts a name.
-        assertEquals(listOf("rb", "tsunoda"), words("#RBTsunoda"))
+        assertEquals(listOf("rb", "t", "sunoda"), words("#RBTsunoda"))
     }
 
     @Test
     fun `an s with a letter after it is not a plural`() {
         // A capital after the "s": the "s" belongs to a short word such as "Is" or "As".
-        assertEquals(listOf("nba", "is", "back"), words("#NBAIsBack"))
-        assertEquals(listOf("japanese", "gp", "as", "it", "happened"), words("#JapaneseGPAsItHappened"))
+        assertEquals(listOf("nba", "i", "s", "back"), words("#NBAIsBack"))
+        assertEquals(listOf("japanese", "gp", "a", "s", "it", "happened"), words("#JapaneseGPAsItHappened"))
         // The price: a real plural followed by a capital is cut too. "GPs" is
-        // still found, as g and ps run together.
-        assertEquals(listOf("g", "ps", "and", "more"), words("GPsAndMore"))
+        // still found, as g, p and s run together.
+        assertEquals(listOf("g", "p", "s", "and", "more"), words("GPsAndMore"))
     }
 
     @Test

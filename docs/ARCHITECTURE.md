@@ -138,11 +138,13 @@ lower case and accents are removed, and a few letters that are more than a
 letter with an accent get their plain spelling: "ø" is read as "o", "ß" as
 "ss", "ł" as "l". Anything that is not a letter or a digit only separates
 words. Inside a hashtag or a name, a new word also starts at a capital after
-a small letter, at the last of several capitals when a small letter follows
-it, and wherever letters meet digits. So "#JapaneseGP2026" is the words
-japanese, gp, 2026, and "#GPHighlights" is gp, highlights. A small "s" with
-no letter after it makes a plural and stays with the capitals: "GPs" is one
-word, but "#NBAIsBack" is nba, is, back.
+a small letter and wherever letters meet digits. The last of several
+capitals is a word of its own when a small letter follows it, because it
+could end the capitals or start the next word. So "#JapaneseGP2026" is the
+words japanese, gp, 2026, "#GPHighlights" is gp, h, ighlights and
+"@NBAonTNT" is nb, a, on, tnt. A small "s" with no letter after it makes a
+plural and stays with the capitals: "GPs" is one word, but "#NBAIsBack" is
+nba, i, s, back.
 
 A term is found in a text when the letters and digits of the term, run
 together, are the letters and digits of one or more whole words of the text

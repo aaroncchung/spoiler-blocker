@@ -81,7 +81,21 @@ class TermTableTest {
         yes("Japanese GP", "#JapaneseGPAsItHappened"),
         // A plural with a capital after it is cut, but still found whole.
         yes("GPs", "#GPsAndMore"),
-        no("GP", "#GPsAndMore"), // word endings are not understood, as with "podiums"
+        // An acronym run into a word in small letters: the last capital is a
+        // word of its own, so it is found with the capitals and with the word.
+        yes("NBA", "@NBAonTNT"),
+        yes("TNT", "@NBAonTNT"),
+        yes("ESPN", "@ESPNcricinfo"),
+        yes("Cricinfo", "@ESPNcricinfo"),
+        yes("BBC", "@BBCsport"),
+        yes("BBC Sport", "@BBCsport"),
+        yes("NBA Finals", "#NBAfinals"),
+        yes("Verstappen", "#MAXverstappen"),
+        yes("Max Verstappen", "#MAXverstappen"),
+        yes("GP", "#GPwinner"),
+        yes("GP", "#GPsAndMore"),
+        yes("Highlights", "#JapaneseGPHighlights"),
+        yes("Tsunoda", "#RBTsunoda"),
 
         // The same letters, whatever the spaces, capitals and punctuation inside.
         yes("Japanese GP", "#japanesegp"),
@@ -199,6 +213,9 @@ class TermTableTest {
         yes("MC", "McLaren unveil the car"),
         // A plural "s" with a capital after it starts a short word, like "Is":
         yes("PS", "#GPsAndMore"),
+        // The last of several capitals is a word of its own when a small letter follows:
+        yes("Max", "MAXimum attack"),
+        yes("Head", "#GPAhead"),
         // Not these: a plural "s" with no letter after it stays with the capitals.
         no("PS", "Three GPs in a row"),
         no("CS", "NPCs everywhere"),
