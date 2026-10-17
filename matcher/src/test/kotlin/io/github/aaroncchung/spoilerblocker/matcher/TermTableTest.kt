@@ -49,8 +49,20 @@ class TermTableTest {
         yes("Perez", "Pe${COMBINING_ACUTE_ACCENT}rez spins"), // "e" followed by a separate accent character
         yes("Hulkenberg", "Hülkenberg in the points"),
         yes("İstanbul", "ISTANBUL PARK"), // Turkish capital dotted I
-        no("Ødegaard", "Odegaard scores"), // known limit: "ø" is a letter of its own
-        no("Diyarbakır", "DIYARBAKIR"), // known limit: so is the Turkish dotless "ı"
+        no("Mueller", "Müller scores"), // known limit: an accent is dropped, not spelled out
+
+        // Letters that are more than a letter with an accent, both ways round.
+        yes("Ødegaard", "Odegaard scores"),
+        yes("Odegaard", "ØDEGAARD SCORES"),
+        yes("Lukasz", "Łukasz saves it"),
+        yes("Łukasz", "LUKASZ"),
+        yes("Strasse", "Straße closed"),
+        yes("Straße", "STRASSE"),
+        yes("Diyarbakır", "DIYARBAKIR"), // Turkish dotless "ı"
+        yes("Diyarbakir", "Diyarbakır"),
+        yes("Gudmundsson", "Guðmundsson"),
+        yes("Aegir", "Ægir"),
+        no("Djokovic", "Đoković wins"), // known limit: "đ" is read as "d", not "dj"
 
         // Hashtags and capitals inside a word.
         yes("Japanese GP", "#JapaneseGP"),
@@ -210,10 +222,13 @@ class TermTableTest {
         // end of a noun. "Suzuka" is missed in "at Suzuka".
         no("스즈카", "스즈카에서 열린 결승"),
 
-        // Known limit: Greek writes "s" differently at the end of a word, and
-        // lower-casing capitals run together cannot know where the first word ended.
+        // Greek writes "s" as "ς" at the end of a word and as "σ" elsewhere.
+        // They count as one letter, so a term is found where its words are
+        // run together and the "ς" has become a "σ".
         yes("Ολυμπιακός Πειραιώς", "ΟΛΥΜΠΙΑΚΟΣ ΠΕΙΡΑΙΩΣ"),
-        no("Ολυμπιακός Πειραιώς", "#ΟΛΥΜΠΙΑΚΟΣΠΕΙΡΑΙΩΣ"),
+        yes("Ολυμπιακός Πειραιώς", "#ΟΛΥΜΠΙΑΚΟΣΠΕΙΡΑΙΩΣ"),
+        yes("Ολυμπιακός FC", "#ΟΛΥΜΠΙΑΚΟΣFC"),
+        yes("Ολυμπιακός", "ολυμπιακοσ"), // typed with the wrong "s" at the end
     )
 
     @Test

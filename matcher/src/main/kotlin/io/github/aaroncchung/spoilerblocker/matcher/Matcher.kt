@@ -100,7 +100,9 @@ sealed interface Reason {
  * > together, are the letters and digits of one or more whole words of the
  * > text that follow each other, run together.
  *
- * Upper and lower case are the same and accents are ignored. Anything that is
+ * Upper and lower case are the same and accents are ignored. A few letters
+ * that are more than a letter with an accent count as their plain spelling:
+ * "Odegaard" is found in "Ødegaard", "Strasse" in "Straße". Anything that is
  * not a letter or a digit separates words. Inside a hashtag or a name, a new
  * word also starts at a capital after a small letter and wherever letters
  * meet digits: "#JapaneseGP2026" is the words japanese, gp, 2026.
@@ -119,8 +121,9 @@ sealed interface Reason {
  *   together: "Suzuka" is not found in "#suzukacircuit".
  * - It cannot tell where a number ends: "F1" is not found in "#F12026", which
  *   is the words f and 12026.
- * - Letters that are more than a plain letter with an accent stay different
- *   letters: "ø" is not "o", "ß" is not "ss", the Turkish "ı" is not "i".
+ * - Each letter has one plain spelling, and other spellings do not match it:
+ *   "Mueller" is not found in "Müller" (muller), nor "Djokovic" in "Đoković"
+ *   (dokovic).
  *
  * What it does too much of. These are accepted, because a miss costs more
  * than an over-block (decision 4 in docs/ARCHITECTURE.md):

@@ -15,6 +15,7 @@ private val MODIFIER_LETTER_APOSTROPHE = Char(0x02BC)
 private val FULL_WIDTH_F = Char(0xFF26)
 private val FULL_WIDTH_1 = Char(0xFF11)
 private val FI_LIGATURE = Char(0xFB01)
+private val CAPITAL_SHARP_S = Char(0x1E9E) // looks like a "B"
 
 class NormalisationTest {
 
@@ -46,11 +47,27 @@ class NormalisationTest {
     }
 
     @Test
-    fun `letters that are more than a letter with an accent are kept`() {
-        // Known limits: these will not match "Odegaard", "Fussball" and "DIYARBAKIR".
-        assertEquals(listOf("ødegaard"), words("Ødegaard"))
-        assertEquals(listOf("fußball"), words("Fußball"))
-        assertEquals(listOf("diyarbakır"), words("Diyarbakır")) // Turkish dotless i
+    fun `letters that are more than a letter with an accent get their plain spelling`() {
+        assertEquals(listOf("odegaard"), words("Ødegaard"))
+        assertEquals(listOf("odegaard"), words("ØDEGAARD"))
+        assertEquals(listOf("lukasz"), words("Łukasz"))
+        assertEquals(listOf("fussball"), words("Fußball"))
+        assertEquals(listOf("strasse"), words("STRA${CAPITAL_SHARP_S}E"))
+        assertEquals(listOf("diyarbakir"), words("Diyarbakır")) // Turkish dotless i
+        assertEquals(listOf("gudmundsson"), words("Guðmundsson"))
+        assertEquals(listOf("da", "nang"), words("Đà Nẵng"))
+        assertEquals(listOf("hamrun"), words("Ħamrun"))
+        assertEquals(listOf("aegir", "oeuvre", "thor"), words("Ægir œuvre Þór"))
+    }
+
+    @Test
+    fun `the two Greek small s are one letter`() {
+        // "σ" and "ς" are the same letter, written differently at the end of a word.
+        assertEquals(words("ολυμπιακοσ"), words("ολυμπιακος"))
+        // Two names in capitals run together. Lower case gives "σ" where the
+        // first name ends, because a letter follows, and "ς" at the very end.
+        // Both become "σ".
+        assertEquals(listOf("ολυμπιακοσπειραιωσ"), words("ΟΛΥΜΠΙΑΚΟΣΠΕΙΡΑΙΩΣ"))
     }
 
     @Test
@@ -179,6 +196,7 @@ class NormalisationTest {
     @Test
     fun `scripts with spaces are cut at the spaces`() {
         assertEquals(listOf("гран", "при", "японии"), words("Гран-при Японии")) // Russian
-        assertEquals(listOf("γκραν", "πρι", "ιαπωνιας"), words("Γκραν Πρι Ιαπωνίας")) // Greek
+        // Greek. The "ς" at the end is compared as "σ".
+        assertEquals(listOf("γκραν", "πρι", "ιαπωνιασ"), words("Γκραν Πρι Ιαπωνίας"))
     }
 }

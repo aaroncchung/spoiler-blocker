@@ -9,7 +9,9 @@ import java.text.Normalizer
  * "Pérez wins the #JapaneseGP2026!" becomes perez, wins, the, japanese, gp,
  * 2026:
  *
- * - Everything is lower case and accents are removed.
+ * - Everything is lower case and accents are removed. A few letters that
+ *   are more than a plain letter with an accent get their plain spelling:
+ *   "Ødegaard" is odegaard, "Straße" is strasse.
  * - Anything that is not a letter or a digit only separates words and is
  *   then forgotten: spaces, punctuation, "#", "@", "_", emoji. The apostrophe
  *   too, so "Max's" is max, s.
@@ -27,14 +29,59 @@ internal fun normalise(text: String): List<String> {
         // The word so far is finished if this character is a separator, or if
         // it is the first character of the next word.
         if (word.isNotEmpty() && (!isPartOfAWord || startsNewWord(characters, index))) {
-            // Lower case comes last, because the capitals say where to cut.
-            words += word.toString().lowercase()
+            words += finished(word)
             word.clear()
         }
         if (isPartOfAWord) word.appendCodePoint(character)
     }
-    if (word.isNotEmpty()) words += word.toString().lowercase()
+    if (word.isNotEmpty()) words += finished(word)
     return words
+}
+
+/**
+ * A word that [normalise] has cut out, in the form that is compared. Lower
+ * case comes only now, because the capitals said where to cut. The plain
+ * spellings come after lower case, so their table needs only small letters.
+ */
+private fun finished(word: CharSequence): String = withPlainSpellings(word.toString().lowercase())
+
+/** [word] with every letter from [plainSpellingOf] replaced by its plain spelling. */
+private fun withPlainSpellings(word: String): String {
+    // Most words have none of these letters and need no new string.
+    if (word.all { plainSpellingOf(it) == null }) return word
+    return buildString {
+        for (character in word) {
+            val plain = plainSpellingOf(character)
+            if (plain == null) append(character) else append(plain)
+        }
+    }
+}
+
+/**
+ * The plain spelling of a small letter that is more than a plain letter with
+ * an accent, or null for any other character. NFKD leaves these letters as
+ * they are, so without this "Odegaard" would not find "Ødegaard". Each is
+ * spelled the way English text usually writes it.
+ */
+private fun plainSpellingOf(letter: Char): String? = when (letter) {
+    'ø' -> "o" // Danish and Norwegian: Ødegaard
+    'ł' -> "l" // Polish: Łukasz
+    // Croatian and Vietnamese. English writes some Serbian names with "dj",
+    // which this does not give: "Djokovic" is still not found in "Đoković".
+    'đ' -> "d"
+    'ð' -> "d" // Icelandic
+    'ħ' -> "h" // Maltese
+    'ŧ' -> "t" // Northern Sami
+    'ı' -> "i" // Turkish dotless i: Diyarbakır
+    'ß' -> "ss" // German: Straße
+    'æ' -> "ae"
+    'œ' -> "oe"
+    'þ' -> "th" // Icelandic
+    // Greek writes "s" as "ς" at the end of a word and as "σ" elsewhere.
+    // Where words are run together, as in a hashtag, the last "s" of a word
+    // is no longer at the end and is written "σ". So the two are one letter.
+    'ς' -> "σ"
+    else -> null
 }
 
 /**
@@ -47,8 +94,9 @@ internal fun normalise(text: String): List<String> {
  * ordinary ones: full-width letters, the single character for "fi", the bold
  * letters some posts use as decoration.
  *
- * Letters that are more than a plain letter with an accent stay as they are:
- * "ø" is not turned into "o", nor "ß" into "ss".
+ * Letters that are more than a plain letter with an accent stay as they are
+ * here: NFKD does not turn "ø" into "o", nor "ß" into "ss". [normalise] gives
+ * them their plain spelling later, with [plainSpellingOf].
  *
  * In scripts such as Thai, Hindi and Japanese some vowels and sound marks are
  * accents too, and they are left out as well. Terms and texts lose the same
