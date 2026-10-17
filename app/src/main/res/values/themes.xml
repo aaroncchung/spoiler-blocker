@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Only what the system needs before Compose draws the first frame.
+        Colours for the app's own screens are set in ui/theme/Theme.kt.
+    -->
+    <style name="Theme.SpoilerBlocker" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

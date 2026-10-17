@@ -8,14 +8,29 @@ switch it off.
 
 ## Status
 
-Design phase. There is no code yet.
+Early build. The app does not block anything yet.
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how v1 works, the decisions
   behind it, what was rejected, and the open risks.
-- [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md): the phased plan for building v1.
+- [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md): the phased plan for building v1,
+  and a table showing which pull requests are done.
 
 Several decisions are still marked as proposed or waiting on an experiment.
 The architecture document says which.
+
+## Building
+
+You need a JDK (17 or newer) and the Android SDK. Installing
+[Android Studio](https://developer.android.com/studio) provides both.
+
+```
+./gradlew build          # compile, run unit tests and lint
+./gradlew installDebug   # install on a connected phone or emulator
+```
+
+From a terminal, Gradle finds the SDK through the `ANDROID_HOME` environment
+variable or an `sdk.dir` line in `local.properties`. Android Studio writes that
+file for you.
 
 ## Ground rules for this repository
 

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Spoiler Blocker</string>
+    <string name="blockers_empty">No blockers yet.</string>
+</resources>

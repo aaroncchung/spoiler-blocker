@@ -7,6 +7,10 @@ local.properties
 # Real captures from a phone (screen text, notifications). Never commit these.
 captures/
 *.capture.json
+# A `uiautomator dump` fetched with `adb pull`, and an `adb bugreport`. Both
+# land in the folder the command is run from, often this one.
+window_dump*.xml
+bugreport*.zip
 
 # Model weights
 *.onnx
@@ -25,3 +29,6 @@ build/
 .idea/
 *.iml
 .DS_Store
+
+# Kotlin compiler session files
+.kotlin/
