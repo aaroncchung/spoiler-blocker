@@ -131,8 +131,11 @@ class StatusNotifier(private val context: Context) {
         channel.description = context.getString(R.string.status_channel_description)
         // No dot on the app's icon for this.
         channel.setShowBadge(false)
-        // Creating a channel that exists already changes nothing but its
-        // name and description, so this can run at every start.
+        // Creating a channel that exists already updates its name and
+        // description, so this can run at every start. Of the rest, only the
+        // importance can change, and only downwards, if the owner has not
+        // touched the channel. Android never raises it, and it ignores a new
+        // sound or lock screen setting: see CHANNEL_ID.
         notificationManager.createNotificationChannel(channel)
     }
 
@@ -186,6 +189,10 @@ class StatusNotifier(private val context: Context) {
             .setOngoing(true)
             // The time would only say when this was last posted.
             .setShowWhen(false)
+            // refresh() posts this again each time the app comes to the
+            // front. If the channel ever makes a sound, it should sound when
+            // the notification first appears, not on every update.
+            .setOnlyAlertOnce(true)
             // A blocker's name is not a spoiler, so the lock screen may show
             // all of it.
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -218,7 +225,12 @@ class StatusNotifier(private val context: Context) {
 
     companion object {
         // The channel's id is stored by Android together with what the owner
-        // chose for the channel, so it must stay the same from build to build.
+        // chose for the channel, so it stays the same from build to build.
+        // The one reason to change it: a louder channel, to show on the lock
+        // screen for example. Android keeps an existing channel as it is, so
+        // that needs a new id, and the old channel removed with
+        // deleteNotificationChannel. Deleting and creating the same id again
+        // does not work: Android brings the deleted channel back as it was.
         const val CHANNEL_ID = "status"
 
         // Any number will do. The app has only this one notification.
