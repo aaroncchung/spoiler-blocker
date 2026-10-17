@@ -45,6 +45,46 @@ class TermCleanUpTest {
     }
 
     @Test
+    fun `drops repeats that the matcher treats as one term and keeps the first`() {
+        val cleaned = cleanUp(
+            terms(
+                strong = listOf("Japanese GP", "#JapaneseGP", "japanese-gp", "Pérez", "Perez"),
+                weak = listOf("pole position", "#PolePosition", "Pole-Position"),
+                sources = listOf("FORMULA 1", "formula1", "Formula-1"),
+            ),
+        )
+
+        assertEquals(listOf("Japanese GP", "Pérez"), cleaned.strong)
+        assertEquals(listOf("pole position"), cleaned.weak)
+        assertEquals(listOf("FORMULA 1"), cleaned.sources)
+    }
+
+    @Test
+    fun `drops entries with no letter or digit, which the matcher would skip`() {
+        val cleaned = cleanUp(
+            terms(
+                strong = listOf("🏁", "Suzuka", "!!!"),
+                weak = listOf("—", "podium", "#"),
+                sources = listOf("@", "FORMULA 1", "🏎️"),
+            ),
+        )
+
+        assertEquals(terms(listOf("Suzuka"), listOf("podium"), listOf("FORMULA 1")), cleaned)
+    }
+
+    @Test
+    fun `drops from weak anything that the matcher treats as a strong term`() {
+        val cleaned = cleanUp(
+            terms(
+                strong = listOf("Lewis Hamilton", "Japanese GP"),
+                weak = listOf("Hamilton", "LewisHamilton", "#japanesegp", "podium"),
+            ),
+        )
+
+        assertEquals(listOf("Hamilton", "podium"), cleaned.weak)
+    }
+
+    @Test
     fun `drops from weak anything that is already strong`() {
         val cleaned = cleanUp(
             terms(
@@ -83,8 +123,8 @@ class TermCleanUpTest {
     }
 
     @Test
-    fun `repeats and blanks do not use up the limit`() {
-        val padded = listOf("", "Suzuka", "suzuka") + (1..MAX_STRONG_TERMS).map { "term $it" }
+    fun `repeats, blanks and symbols do not use up the limit`() {
+        val padded = listOf("", "Suzuka", "suzuka", "#Suzuka", "🏁") + (1..MAX_STRONG_TERMS).map { "term $it" }
 
         val cleaned = cleanUp(terms(strong = padded))
 

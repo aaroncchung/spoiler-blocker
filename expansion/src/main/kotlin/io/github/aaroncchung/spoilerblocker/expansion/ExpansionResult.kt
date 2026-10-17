@@ -4,8 +4,8 @@ package io.github.aaroncchung.spoilerblocker.expansion
  * How wide a blocker reaches. For the description "2026 Japanese Grand Prix",
  * [NARROW] means that race and [BROAD] means all of Formula 1.
  *
- * The matcher module has its own breadth type. This module does not depend on
- * the matcher, so the app converts between the two.
+ * The matcher module has its own breadth type. This module uses the matcher
+ * only inside, to tidy the lists, so the app converts between the two.
  */
 enum class Breadth { NARROW, BROAD }
 
@@ -49,10 +49,18 @@ enum class FailureKind(val canRetry: Boolean) {
     /** No API key has been set. */
     MISSING_API_KEY(canRetry = false),
 
-    /** The API could not be reached: no connection, or the connection dropped. */
+    /**
+     * The API could not be reached: no connection, or the connection dropped.
+     * An attempt to connect that timed out is one of these, as on Wi-Fi with
+     * no internet behind it.
+     */
     NO_NETWORK(canRetry = true),
 
-    /** The connection was made but no answer came in time. */
+    /**
+     * The connection was made but no answer came in time. The API may have
+     * finished the call anyway and billed it, so trying again costs a second
+     * call.
+     */
     TIMEOUT(canRetry = true),
 
     /** The API rejected the key (HTTP 401 or 403). */

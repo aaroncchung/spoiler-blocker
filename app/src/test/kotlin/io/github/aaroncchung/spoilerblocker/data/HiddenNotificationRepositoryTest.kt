@@ -439,16 +439,76 @@ class HiddenNotificationRepositoryTest {
     }
 
     @Test
-    fun `clear removes the copy of an unreadable file as well`() = runTest {
-        // The copy holds the text of notifications, like the list itself.
-        file.writeText("""{"version":1,"notifications":[{"id":"1","title":"Did you watch Suz""")
+    fun `a second file that cannot be read is kept beside the first copy`() = runTest {
+        // Each repository here stands for one run of the app, as in the
+        // reload test above.
+        val firstCutShort = """{"version":1,"notifications":[{"id":"1","hiddenAt"""
+        file.writeText(firstCutShort)
+        val firstJob = Job()
+        val firstScope = CoroutineScope(StandardTestDispatcher(testScheduler) + firstJob)
+        val firstRun = HiddenNotificationRepository({ file }, firstScope)
+        assertEquals(emptyList<HiddenNotification>(), firstRun.hiddenNotifications.first())
+        firstJob.cancelAndJoin()
+
+        val secondCutShort = """{"version":1,"notifications":[{"id":"2","hiddenAt"""
+        file.writeText(secondCutShort)
+        val secondRun = HiddenNotificationRepository({ file }, this)
+
+        assertEquals(emptyList<HiddenNotification>(), secondRun.hiddenNotifications.first())
+        assertEquals(firstCutShort, unreadableCopy.readText())
+        assertEquals(
+            secondCutShort,
+            File(temporaryFolder.root, "hidden_notifications.json.unreadable.2").readText(),
+        )
+    }
+
+    @Test
+    fun `a file that cannot be read is left alone if the copy cannot be made`() = runTest {
+        // The copy's name is too long to be made, as in BlockerRepositoryTest.
+        val longNamed = File(temporaryFolder.root, "h".repeat(245) + ".json")
+        val cutShort = """{"version":1,"notifications":[{"id":"1","hiddenAt"""
+        longNamed.writeText(cutShort)
+        val repository = HiddenNotificationRepository({ longNamed }, this)
+
+        try {
+            repository.hiddenNotifications.first()
+            fail("Reading should fail when the copy cannot be made.")
+        } catch (e: IOException) {
+            // Expected.
+        }
+        try {
+            repository.add(hidden("1"))
+            fail("Adding should fail when the copy cannot be made.")
+        } catch (e: IOException) {
+            // Expected.
+        }
+
+        assertEquals(cutShort, longNamed.readText())
+    }
+
+    @Test
+    fun `clear removes every copy of an unreadable file, and nothing else`() = runTest {
+        // The copies hold the text of notifications, like the list itself.
+        // Two are left from earlier runs of the app, and the repository
+        // makes the third.
+        unreadableCopy.writeText("""{"version":1,"notifications":[{"id":"1","title":"Did you watch Suz""")
+        val secondCopy = File(temporaryFolder.root, "hidden_notifications.json.unreadable.2")
+        secondCopy.writeText("""{"version":1,"notifications":[{"id":"2","title":"Suzuka was wi""")
+        file.writeText("""{"version":1,"notifications":[{"id":"3","title":"What a fin""")
+        val blockersCopy = File(temporaryFolder.root, "blockers.json.unreadable")
+        blockersCopy.writeText("""{"version":1,"blockers":[{"id":"race","na""")
         val repository = HiddenNotificationRepository({ file }, this)
         repository.hiddenNotifications.first()
-        assertTrue(unreadableCopy.exists())
+        val thirdCopy = File(temporaryFolder.root, "hidden_notifications.json.unreadable.3")
+        assertTrue(thirdCopy.exists())
 
         repository.clear()
 
         assertFalse(unreadableCopy.exists())
+        assertFalse(secondCopy.exists())
+        assertFalse(thirdCopy.exists())
+        // The copy of the blockers is not the hidden list's to remove.
+        assertTrue(blockersCopy.exists())
         assertEquals(emptyList<HiddenNotification>(), repository.hiddenNotifications.first())
     }
 

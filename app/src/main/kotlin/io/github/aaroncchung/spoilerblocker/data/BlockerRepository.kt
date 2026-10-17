@@ -48,16 +48,16 @@ class BlockerRepository(
         // Runs when the file cannot be read as blockers, and starts again from
         // an empty list. Without it the app would crash on every launch until
         // its data was cleared. But an empty list means nothing is blocked,
-        // so the unreadable file is first kept beside the real one, as
-        // blockers.json.unreadable. The blockers in it can then be recovered
-        // by hand, and the copy shows why they went missing. If the copy
-        // cannot be made, the read fails and the file is left alone.
+        // so the unreadable file is first copied beside the real one, as
+        // blockers.json.unreadable, or .unreadable.2 and so on if an earlier
+        // copy is there. The blockers in it can then be recovered by hand,
+        // and the copy shows why they went missing.
+        //
+        // If the copy cannot be made, keepUnreadableCopy throws. DataStore
+        // lets an exception from this handler through, so the read fails and
+        // the file is left alone.
         corruptionHandler = ReplaceFileCorruptionHandler {
-            val unreadable = produceFile()
-            unreadable.copyTo(
-                File(unreadable.parentFile, unreadable.name + ".unreadable"),
-                overwrite = true,
-            )
+            keepUnreadableCopy(produceFile())
             StoredBlockers()
         },
         scope = scope,

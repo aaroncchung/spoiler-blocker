@@ -35,7 +35,7 @@ internal class TermIndex(termsAsTyped: List<String>) {
         var longest = 0
         // withIndex() gives each term together with its place in the list.
         for ((position, term) in termsAsTyped.withIndex()) {
-            val key = normalise(term).joinToString(separator = "")
+            val key = matchingKey(term)
             // A term that is blank, or only punctuation or emoji, has an empty
             // key and could never be found.
             if (key.isEmpty()) continue

@@ -19,9 +19,13 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.Call
+import okhttp3.Connection
+import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,8 +35,8 @@ import okhttp3.coroutines.executeAsync
 // ---------------------------------------------------------------------------
 // What is asked of the Claude API. Everything worth tuning is in this block.
 // The request and reply shapes follow Anthropic's documentation for the
-// Messages API, the web search tool and structured outputs, as read on
-// 2026-10-05: https://platform.claude.com/docs/en/api/messages/create
+// Messages API and the web search tool, as read on 2026-10-05:
+// https://platform.claude.com/docs/en/api/messages/create
 // ---------------------------------------------------------------------------
 
 // KeywordExpanderTest spells out the strings below a second time, so that a
@@ -70,41 +74,25 @@ internal const val MAX_WEB_SEARCHES = 8
 internal const val MAX_CONTINUATIONS = 2
 
 // The reply is not streamed: nothing comes back until the model has finished
-// searching and writing, which can take a minute or more. So the read timeout
-// is in effect the time allowed for one whole reply. The other two are short,
-// so that a phone with no usable connection fails quickly.
+// searching and writing, which can take several minutes. So the read timeout
+// is in effect the time allowed for one whole reply. Ten minutes is what
+// Anthropic's own client libraries allow by default. Giving up sooner saves
+// nothing, because the server may finish the reply anyway and bill it, and
+// the answer is then lost. (Streaming the reply would let the timeout measure
+// the gaps between its pieces instead, but it takes more code, for a call made
+// once per blocker.) The other two are short, so that a phone with no usable
+// connection fails quickly.
 private val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(15)
 private val WRITE_TIMEOUT: Duration = Duration.ofSeconds(15)
-private val READ_TIMEOUT: Duration = Duration.ofMinutes(4)
+private val READ_TIMEOUT: Duration = Duration.ofMinutes(10)
 
-// Four minutes is a long time to wait on a connection that has died, which
+// Ten minutes is a long time to wait on a connection that has died, which
 // happens when a phone leaves its Wi-Fi. So while it waits, the client asks
 // the server this often whether it is still there (an HTTP/2 "ping"). If no
 // answer has come by the time the next ping is due, the call fails. A reply
 // that is only slow is not affected: the server answers pings while the model
 // is still working.
 private val PING_INTERVAL: Duration = Duration.ofSeconds(30)
-
-/**
- * The shape the model's final answer must have. The API guarantees a reply
- * that fits a schema sent this way ("structured outputs"), so the answer can
- * be read by code. JSON Schema has no supported way to limit how long a list
- * is, which is why the limits are in the prompt and in cleanUp().
- */
-private val TERMS_SCHEMA = Json.parseToJsonElement(
-    """
-    {
-      "type": "object",
-      "properties": {
-        "strong":  {"type": "array", "items": {"type": "string"}},
-        "weak":    {"type": "array", "items": {"type": "string"}},
-        "sources": {"type": "array", "items": {"type": "string"}}
-      },
-      "required": ["strong", "weak", "sources"],
-      "additionalProperties": false
-    }
-    """,
-)
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
@@ -166,8 +154,14 @@ class KeywordExpander(
             try {
                 requestTerms(description.trim(), breadth)
             } catch (e: InterruptedIOException) {
-                // OkHttp's timeouts all arrive as this type or a subclass of it.
-                Failure(FailureKind.TIMEOUT, "The Claude API did not answer in time.")
+                // OkHttp's timeouts all arrive as this type or a subclass of
+                // it. post() turns one from before the connection was made
+                // into a NotConnectedException, which lands in the next branch.
+                Failure(
+                    FailureKind.TIMEOUT,
+                    "The Claude API did not answer in time. It may still have finished " +
+                        "the call and billed it, so trying again costs a second call.",
+                )
             } catch (e: IOException) {
                 val detail = e.message ?: e.javaClass.simpleName
                 Failure(FailureKind.NO_NETWORK, "Could not reach the Claude API: $detail")
@@ -240,10 +234,11 @@ class KeywordExpander(
         }
         putJsonObject("output_config") {
             put("effort", EFFORT)
-            putJsonObject("format") {
-                put("type", "json_schema")
-                put("schema", TERMS_SCHEMA)
-            }
+            // There is no "format" here. Structured outputs would make the API
+            // guarantee an answer in JSON, but Anthropic's documentation says
+            // they cannot be used with citations, and web search always cites
+            // its sources. So the prompt asks for JSON and readTerms() takes
+            // it out of the text.
         }
         // This model has safety filters that now and then decline a harmless
         // request, for example a drama about hackers. With this set, the API
@@ -262,13 +257,25 @@ class KeywordExpander(
             .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
 
+        val call = httpClient.newCall(request)
+        val watch = ConnectionWatch()
+        call.addEventListener(watch)
+
         // executeAsync waits for the reply without holding a thread. If this
         // coroutine is cancelled during that wait, it abandons the request.
         // Once the reply has started to arrive, reading it is not interrupted;
         // by then the whole of it is normally ready, so the reading is quick.
         // use {} closes the connection afterwards.
-        return httpClient.newCall(request).executeAsync().use { response ->
-            HttpReply(response.code, response.body.string())
+        try {
+            return call.executeAsync().use { response ->
+                HttpReply(response.code, response.body.string())
+            }
+        } catch (e: InterruptedIOException) {
+            // OkHttp reports a timeout while connecting in the same way as
+            // one while waiting for the answer. On Wi-Fi with no internet
+            // behind it, connecting is what times out, and that is no network.
+            if (!watch.connected) throw NotConnectedException(e)
+            throw e
         }
     }
 
@@ -313,8 +320,11 @@ class KeywordExpander(
     }
 
     private fun readTerms(content: JsonArray): ExpansionResult {
+        val answer = jsonObjectIn(finalText(content))
+            ?: return Failure(FailureKind.BAD_REPLY, "The reply did not contain one JSON object that could be read.")
+
         val reply = try {
-            json.decodeFromString<TermsReply>(finalText(content))
+            json.decodeFromJsonElement<TermsReply>(answer)
         } catch (e: IllegalArgumentException) {
             return Failure(FailureKind.BAD_REPLY, "The reply was not the three lists that were asked for.")
         }
@@ -331,9 +341,11 @@ class KeywordExpander(
      *
      * A reply is a list of blocks. Blocks for thinking, for each search and
      * for each set of search results come first, and the answer is the text
-     * at the end. The API may split that text over several blocks, so they are
-     * joined. Text before a search is the model saying what it is about to
-     * do. It is thrown away when the next block that is not text turns up.
+     * at the end. Where the model cites a search result, the API puts the
+     * cited words in a text block of their own, so one answer can arrive as
+     * several text blocks, and they are joined. Text before a search is the
+     * model saying what it is about to do. It is thrown away when the next
+     * block that is not text turns up.
      */
     private fun finalText(content: JsonArray): String {
         val answer = StringBuilder()
@@ -346,6 +358,27 @@ class KeywordExpander(
             }
         }
         return answer.toString()
+    }
+
+    /**
+     * The one JSON object in [text], or null if there is none that can be read.
+     *
+     * The prompt asks for the object alone, but nothing enforces that, and a
+     * model may still put it in a code fence (```json ... ```) or add a
+     * sentence before or after it. So the object is taken to run from the
+     * first "{" to the last "}". If there are two objects, or a "{" in a
+     * sentence before the object or a "}" in one after it, that stretch is
+     * not valid JSON and the answer is not used.
+     */
+    private fun jsonObjectIn(text: String): JsonObject? {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start < 0 || end < start) return null
+        return try {
+            json.parseToJsonElement(text.substring(start, end + 1)) as? JsonObject
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 }
 
@@ -364,6 +397,24 @@ internal fun defaultHttpClient(): OkHttpClient =
         // reported and the owner decides whether to try again.
         .retryOnConnectionFailure(false)
         .build()
+
+/**
+ * Notes whether a call got as far as a connection to the API. OkHttp calls
+ * connectionAcquired() when the call has one, whether new or reused.
+ */
+private class ConnectionWatch : EventListener() {
+    // Set on one of OkHttp's threads and read on another.
+    @Volatile
+    var connected = false
+        private set
+
+    override fun connectionAcquired(call: Call, connection: Connection) {
+        connected = true
+    }
+}
+
+/** A call that failed before it had a connection to the API. expand() reports it as no network. */
+private class NotConnectedException(cause: IOException) : IOException(cause.message, cause)
 
 // The parts of the API's replies that this code reads. Each class matches the
 // JSON field for field; @SerialName gives the JSON name where Kotlin's naming
@@ -388,7 +439,11 @@ private class ApiErrorBody(val error: ApiError? = null)
 @Serializable
 private class ApiError(val message: String? = null)
 
-/** The model's final answer, as laid down by [TERMS_SCHEMA]. */
+/**
+ * The model's final answer, in the shape that "# Answer" in ExpansionPrompt.kt
+ * asks for. Each list has to be there and hold only strings, or the answer is
+ * not used. Any other key is ignored.
+ */
 @Serializable
 private class TermsReply(
     val strong: List<String>,

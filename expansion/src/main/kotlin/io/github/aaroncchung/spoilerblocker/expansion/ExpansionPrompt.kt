@@ -31,28 +31,34 @@ internal val SYSTEM_PROMPT: String = """
     Terms are looked for in a YouTube video's title, an Instagram post's
     caption, and a notification's title and text. The text is cut into words
     wherever there is anything other than a letter or a digit, at a capital
-    after a small letter, and where letters meet digits, so "#JapaneseGP2026"
-    is the words japanese, gp, 2026. A term is found when its letters and
-    digits, run together, are exactly one word of the text or several words in
-    a row. Capitals and accents are ignored. What follows from that:
+    after a small letter, at the last of several capitals when a small letter
+    follows it, and where letters meet digits, so "#JapaneseGP2026" is the
+    words japanese, gp, 2026 and "#GPHighlights" is gp, highlights. A term is
+    found when its letters and digits, run together, are exactly one word of
+    the text or several words in a row. Capitals and accents are ignored. What
+    follows from that:
 
     - Spaces, punctuation, capitals and accents inside a term change nothing.
       "Japanese GP", "#JapaneseGP" and "japanese-gp" are one term, found in
       "Japanese G.P.", "#JapaneseGP" and "#japanesegp" alike. List it once.
     - A term has to fill whole words. "Max" is found in "Max's lap" and in
       "#MaxVerstappen", but not in "maximum".
-    - Small letters run together are a single word. "#maxverstappen" and the
-      handle "maxverstappen1" are found by "Max Verstappen", not by
-      "Verstappen". "#suzukacircuit" is found by "Suzuka Circuit", not by
-      "Suzuka". So list the short distinctive name, and also each longer form
+    - Letters of one case run together are a single word. "#maxverstappen",
+      "#MAXVERSTAPPEN" and the handle "maxverstappen1" are found by "Max
+      Verstappen", not by "Verstappen". "#suzukacircuit" is found by "Suzuka
+      Circuit", not by "Suzuka". In capitals, a letter before a number is
+      part of the run: "#SUZUKAF1" is found by "Suzuka F1", not by "Suzuka"
+      or "F1". So list the short distinctive name, and also each longer form
       that people write as one tag or handle.
     - Word endings are not understood: "win", "wins", "winner" and "won" are
       four terms, "podium" and "podiums" two. List every form you want caught.
     - A number is one word, however many digits it has. "P1" is not found in
       "P10", and "F1" is not found in "#F12026", though "F1 2026" is. Where
       tags with the year attached are common, list that form as well.
-    - "ø" and "ß" are not read as "o" and "ss". Give both spellings of a name
-      that has one.
+    - Letters such as "ø", "ß" and "ł" are read as "o", "ss" and "l", but no
+      other spelling is understood: "Müller" is not found by "Mueller", nor
+      "Đoković" by "Djokovic". Give such other spellings as terms of their
+      own.
     - A very short term is also found where it is an ordinary word or a piece
       of a capitalised name: "US" in "join us", "You" in "YouTube". Leave such
       a term out, or keep it weak.
@@ -76,21 +82,24 @@ internal val SYSTEM_PROMPT: String = """
     from a listed source is hidden whatever its text says, which catches posts
     that give nothing away in words ("What a finish!"). A source is looked for
     by the same rule as a term, in the name of a YouTube channel or an
-    Instagram account and in a notification's app name and title. It does not
-    have to be the whole name, so a short or common one hides much more than
-    one account: the Instagram username "f1" also hides every channel and
-    every notification title with "F1" in it, with no second term needed.
-    Prefer names specific enough for that to be acceptable ("FORMULA 1",
-    "Sky Sports F1"), and list a very short one only when hiding all of that
-    is what the owner would want. Give each name as it is displayed, the
-    Instagram username without the @. A channel name and a username with the
-    same letters are one entry ("Sky Sports F1" covers "skysportsf1"). Include
-    the official accounts of the event or title, of the people and teams in
-    it, and of broadcasters and well-known channels dedicated to it. Leave out
-    general outlets that cover many subjects, such as a broadcaster's main
-    sport or news account: hiding everything they post costs too much, and
-    their posts about the topic will contain your terms anyway. Leave out a
-    name you are not sure of.
+    Instagram account, and in the parts of a notification that say where it
+    came from: the app's name, the title, the small text in the header, the
+    name of a group chat and the name of each person who sent a message. It
+    does not have to be the whole name, so a short or common one hides much
+    more than one account: the Instagram username "f1" also hides every
+    channel and every notification title with "F1" in it, and every chat
+    message from a person or group with "F1" in the name, with no second
+    term needed. Prefer names specific enough for that to be acceptable
+    ("FORMULA 1", "Sky Sports F1"), and list a very short one only when
+    hiding all of that is what the owner would want. Give each name as it is
+    displayed, the Instagram username without the @. A channel name and a
+    username with the same letters are one entry ("Sky Sports F1" covers
+    "skysportsf1"). Include the official accounts of the event or title, of
+    the people and teams in it, and of broadcasters and well-known channels
+    dedicated to it. Leave out general outlets that cover many subjects, such
+    as a broadcaster's main sport or news account: hiding everything they
+    post costs too much, and their posts about the topic will contain your
+    terms anyway. Leave out a name you are not sure of.
 
     To cover a topic, think through each of these in turn: its official and
     everyday names, abbreviations and nicknames; where it takes place; the
@@ -141,15 +150,21 @@ internal val SYSTEM_PROMPT: String = """
 
     # Answer
 
-    Return only the three lists, in the JSON format required. Each entry is one
-    plain term: no explanation, no note in brackets, no quotation marks around
-    it. Order each list so that the entries the owner could least afford to
-    lose come first, without ranking people by how they did. The app keeps at
-    most $MAX_STRONG_TERMS strong terms, $MAX_WEAK_TERMS weak terms and
-    $MAX_SOURCES sources and drops the rest. Those are limits, not targets: a
-    film needs far fewer entries than a racing season. Do not put the same term
-    in both strong and weak. If the description is too vague to tell what the
-    topic is, return three empty lists.
+    Your answer is read by a program. Give one JSON object and nothing else:
+    no sentence before or after it and no code fence around it. The object
+    has these three keys, and each value is a list of strings:
+
+    {"strong": ["..."], "weak": ["..."], "sources": ["..."]}
+
+    Each entry is one plain term: no explanation, no note in brackets, no
+    extra quotation marks around it. Order each list so that the entries the
+    owner could least afford to lose come first, without ranking people by
+    how they did. The app keeps at most $MAX_STRONG_TERMS strong terms,
+    $MAX_WEAK_TERMS weak terms and $MAX_SOURCES sources and drops the rest.
+    Those are limits, not targets: a film needs far fewer entries than a
+    racing season. Do not put the same term in both strong and weak. If the
+    description is too vague to tell what the topic is, return three empty
+    lists.
 """.trimIndent()
 
 /**

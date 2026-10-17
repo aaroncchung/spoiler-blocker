@@ -42,20 +42,16 @@ class HiddenNotificationRepository(
             produceFile().toOkioPath()
         },
         // A file that cannot be read is kept beside the real one, as
-        // hidden_notifications.json.unreadable, and the list starts again
-        // empty.
+        // hidden_notifications.json.unreadable, or .unreadable.2 and so on if
+        // an earlier copy is there, and the list starts again empty. If the
+        // copy cannot be made, the read fails and the file is left alone, as
+        // for the blockers.
         corruptionHandler = ReplaceFileCorruptionHandler {
-            produceFile().copyTo(unreadableCopy(), overwrite = true)
+            keepUnreadableCopy(produceFile())
             StoredHiddenNotifications()
         },
         scope = scope,
     )
-
-    /** Where a file that could not be read is kept. */
-    private fun unreadableCopy(): File {
-        val file = produceFile()
-        return File(file.parentFile, file.name + ".unreadable")
-    }
 
     /**
      * The hidden notifications, newest first. Collecting this gives the
@@ -103,16 +99,20 @@ class HiddenNotificationRepository(
     }
 
     /**
-     * Removes every entry, and the copy of a file that could not be read if
-     * there is one: it holds the text of notifications too.
+     * Removes every entry, and every copy of a file that could not be read:
+     * the copies hold the text of notifications too.
      */
     suspend fun clear() {
         dataStore.updateData { stored ->
             stored.copy(version = CURRENT_VERSION, notifications = emptyList())
         }
-        // DataStore does its own file work on a background thread. This
-        // delete is not DataStore's, so it has to be sent there by hand.
-        withContext(Dispatchers.IO) { unreadableCopy().delete() }
+        // DataStore does its own file work on a background thread. These
+        // deletes are not DataStore's, so they have to be sent there by hand.
+        withContext(Dispatchers.IO) {
+            for (copy in unreadableCopiesOf(produceFile())) {
+                copy.delete()
+            }
+        }
     }
 
     companion object {

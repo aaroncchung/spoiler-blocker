@@ -44,15 +44,15 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 |---|---|
 | `app/` | The Android app. Package `io.github.aaroncchung.spoilerblocker`. |
 | `app/…/SpoilerBlockerApplication.kt` | The Application and `AppContainer`, which owns the objects shared by the whole app. |
-| `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. |
+| `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. A file that cannot be read is copied aside by `keepUnreadableCopy` before it is replaced, to `<name>.unreadable`, then `.unreadable.2` and so on. A copy is never overwritten. Clearing the hidden list deletes every copy of its file, found by `unreadableCopiesOf`. |
 | `app/…/blocking/` | `ActiveBlockers`, which decides which enabled blocker blocks something. Plain Kotlin, shared by the notification listener and, later, the screen reader. |
 | `app/…/notifications/` | The notification listener, `NotificationContent` (a notification's text as plain Kotlin), `HidingDecision.kt` (what to dismiss and what to list, as plain Kotlin) and the notification access helpers. |
-| `app/…/status/` | `StatusNotifier`, which shows the status notification while a blocker is on, `StatusNotificationContent` (what it says, as plain Kotlin) and the helpers for the permission to post notifications. |
+| `app/…/status/` | `StatusNotifier`, which shows the status notification while a blocker is on, with the receivers that put it back after it is swiped away or switched back on; `StatusNotificationContent` (what it says and whether notifications are being hidden, as plain Kotlin); and the helpers for the permission to post notifications and for the status channel. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. `TermTableTest` is a table of terms and texts: add a row there when a match surprises you. |
 | `eval/` | A command-line script that measures the matcher against labelled examples. See `eval/README.md`. |
-| `expansion/` | Keyword expansion: one Claude API call that turns a description into strong terms, weak terms and sources. Plain Kotlin, no Android. The prompt is in `ExpansionPrompt.kt`; the model and limits are constants at the top of `KeywordExpander.kt`. |
+| `expansion/` | Keyword expansion: one Claude API call that turns a description into strong terms, weak terms and sources. Plain Kotlin, no Android. The prompt is in `ExpansionPrompt.kt`; the model and limits are constants at the top of `KeywordExpander.kt`. Clean-up uses the matcher's `matchingKey()` and `hasMatchableText()`, so it treats two terms as the same exactly when the matcher does. |
 | `gradle/libs.versions.toml` | Every dependency version. |
 | `.github/workflows/ci.yml` | CI: `./gradlew build` on every pull request. |
 | `docs/` | Architecture, build plan and, later, Phase 0 findings. |
@@ -83,8 +83,13 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
   status notification never says more than is true.
 - The Anthropic API key lives in `local.properties` as `anthropic.apiKey=`.
   It is never committed, logged or shown.
-- The prompt in `ExpansionPrompt.kt` describes how the matcher works. When
-  the matching rules change, change the prompt in the same pull request.
+- The prompt in `ExpansionPrompt.kt` describes how the matcher works and
+  where it looks, including which parts of a notification are sources
+  (`NotificationContent.toCandidate()`). When either changes, change the
+  prompt in the same pull request. The prompt also lays down the JSON answer;
+  keep `TermsReply` in `KeywordExpander.kt` the same shape. The request does
+  not use structured outputs: Anthropic documents them as incompatible with
+  citations, which web search always adds.
 - User-visible text goes in `res/values/strings.xml`.
 - Screen text is never stored or sent anywhere in normal use (decision 15).
   Only the description typed for a blocker, its breadth and today's date ever
