@@ -12,6 +12,13 @@ captures/
 window_dump*.xml
 bugreport*.zip
 
+# Real labelled examples for the evaluation script. Never commit these.
+# Every examples file is ignored wherever it is saved, except the invented
+# samples in eval/sample/.
+eval/data/
+*.jsonl
+!eval/sample/*.jsonl
+
 # Model weights
 *.onnx
 *.gguf

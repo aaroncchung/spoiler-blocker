@@ -193,7 +193,7 @@ request, **Yes** means the work itself cannot be done without the phone.
 | 17 | 5 | Instagram home feed grouping. Waits for E1. | No | |
 | 18 | 5 | Setup screen for permissions and the One UI battery setting | Yes | |
 | 19 | 5 | Performance pass | Yes | |
-| 20 | 6 | Evaluation script. The labelled data stays outside the repository. | No | |
+| 20 | 6 | Evaluation script. The labelled data stays outside the repository. Built early, because it only needs the matcher. | No | ✓ |
 | 21 | 6 | The decisions that follow from the evaluation | No | |
 
 Two rules about order:

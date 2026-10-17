@@ -1,0 +1,6 @@
+{
+  "strong": ["Japanese Grand Prix", "Japanese GP", "#JapaneseGP", "Suzuka"],
+  "weak": ["Max", "Verstappen", "Pérez", "podium", "P1", "pole", "safety car"],
+  "sources": ["FORMULA 1", "Sky Sports F1"],
+  "breadth": "narrow"
+}
