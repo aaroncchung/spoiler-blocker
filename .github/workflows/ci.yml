@@ -10,8 +10,10 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its older run. head_ref is empty on a
+# push to main, so each of those gets a group of its own and every merge is built.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:

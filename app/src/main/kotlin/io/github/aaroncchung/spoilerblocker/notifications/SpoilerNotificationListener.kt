@@ -54,10 +54,13 @@ import kotlinx.coroutines.launch
  *   and dismissing the summary is listed when Android reports that it has
  *   gone. That report carries a slimmed-down copy of the notification, so
  *   the entry has its title and text but not the messages of a chat.
- * - One kind of child cannot be listed. Android holds every new
- *   notification back for a moment before it shows it to anyone. A child
- *   that is still being held back when its summary is dismissed goes with
- *   the group, and no listener is ever told that it existed.
+ * - One kind of child cannot be listed. Android may hold a new
+ *   notification back for a moment before it shows it to anyone. It does
+ *   so while a notification assistant is on, such as the one that suggests
+ *   actions and replies, to give the assistant time to look at the
+ *   notification first. A child that is still being held back when its
+ *   summary is dismissed goes with the group, and no listener is ever told
+ *   that it existed.
  *
  * **What a listener cannot hide.**
  *
@@ -68,6 +71,24 @@ import kotlinx.coroutines.launch
  *   notification only takes the entry out of the notification shade. The
  *   bubble stays on screen and so does the text beside it, and nothing a
  *   listener can call removes them. It is still dismissed and listed.
+ * - Android's notification history (on One UI, under Settings ›
+ *   Notifications › Advanced settings), if it is on. It records the title
+ *   and text of a notification when it is posted, and keeps them after
+ *   this listener has dismissed it.
+ * - What other notification listeners do with it. A paired Galaxy Watch
+ *   (through Galaxy Wearable), Android Auto or Phone Link gets each
+ *   notification at the same moment as this app, so it may show it before
+ *   it is dismissed.
+ * - The alert for an update. Once this listener has dismissed a
+ *   notification, an app that updates it, such as a live score or a chat,
+ *   posts it again as a new one. FLAG_ONLY_ALERT_ONCE, which keeps an
+ *   update quiet, only covers a notification that is still showing, so
+ *   the update may sound, vibrate and show a banner again before it is
+ *   dismissed again. Snoozing the notification instead of dismissing it
+ *   might avoid that, at a cost: there is no public way to bring it back
+ *   when the blocker is switched off, and the app is not told that it went
+ *   (its deleteIntent is not sent). That needs measuring on the phone
+ *   first.
  *
  * **When something goes wrong.** A notification is put together by another
  * app, and it can be malformed in ways that make reading it throw. An
@@ -105,6 +126,12 @@ class SpoilerNotificationListener : NotificationListenerService() {
         super.onCreate()
         container = (application as SpoilerBlockerApplication).container
 
+        // No guard here, on purpose. Collecting the blockers fails if
+        // blockers.json cannot be used: a newer build wrote it, or it cannot
+        // be read and cannot be copied aside. The process then stops, as the
+        // rest of the app does on such a file (see CURRENT_VERSION in
+        // BlockerRepository.kt). Carrying on would block nothing while the
+        // owner thinks the blockers are on.
         scope.launch {
             container.blockerRepository.blockers
                 // Only the blockers that are on matter here. distinctUntilChanged
@@ -185,8 +212,9 @@ class SpoilerNotificationListener : NotificationListenerService() {
             block()
         } catch (e: RuntimeException) {
             // The kind of exception and never its message: a message can
-            // quote the notification that caused it.
-            Log.w(TAG, "$what: could not be handled (${e.javaClass.simpleName})")
+            // quote the notification that caused it. Only in debug builds,
+            // like every line this listener logs about a package.
+            if (BuildConfig.DEBUG) Log.w(TAG, "$what: could not be handled (${e.javaClass.simpleName})")
             null
         }
 
@@ -299,9 +327,11 @@ class SpoilerNotificationListener : NotificationListenerService() {
                 // The disk: it is full, for example.
                 Log.w(TAG, "Could not store hidden notifications (${e.javaClass.simpleName})")
             } catch (e: IllegalStateException) {
-                // The file was written by a newer build of the app. The
-                // hidden list screen still fails loudly on such a file,
+                // The file was written by a newer build of the app. Opening
+                // the hidden list screen crashes the app on such a file,
                 // which is the signal meant for that developer-only case.
+                // The start screen only leaves out the count of hidden
+                // notifications (see BlockerListViewModel).
                 Log.w(TAG, "Could not store hidden notifications (${e.javaClass.simpleName})")
             }
         }
@@ -344,12 +374,31 @@ class SpoilerNotificationListener : NotificationListenerService() {
             }
 
         val otherTexts = buildList {
-            // The labels of the buttons.
-            addAll(
-                readPart(emptyList()) {
-                    notification.actions.orEmpty().mapNotNull { action -> action?.title?.toString() }
-                },
-            )
+            val actions: List<Notification.Action> =
+                readPart(emptyList()) { notification.actions.orEmpty().filterNotNull() }
+            for (action in actions) {
+                // The label of the button.
+                add(readPart("") { textOf(action.title) })
+                // A reply button opens a field under the notification. Its
+                // label is the hint in the field. Its choices are replies
+                // the app suggests, which Android shows as chips under the
+                // notification, ready to send with one tap: "Max won!?".
+                val inputs = readPart(emptyList()) { action.remoteInputs.orEmpty().filterNotNull() }
+                for (input in inputs) {
+                    add(readPart("") { textOf(input.label) })
+                    addAll(readPart(emptyList()) { textsOf(input.choices) })
+                }
+            }
+            // Not read: replies and actions suggested by the system's
+            // notification assistant, when the setting for suggested actions
+            // and replies is on. Android shows them like the app's own, but
+            // they are not in the notification. They are in this listener's
+            // Ranking (getSmartReplies and getSmartActions), and they may come
+            // after the notification itself, in onNotificationRankingUpdate.
+            // Reading them would mean passing the ranking to every place that
+            // reads a notification, and judging every notification again
+            // whenever the ranking changes.
+
             // What an app gives for a locked screen that hides the content.
             val publicExtras: Bundle? = readPart(null) { notification.publicVersion?.extras }
             add(text(Notification.EXTRA_TITLE, from = publicExtras))
