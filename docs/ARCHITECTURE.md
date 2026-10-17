@@ -55,7 +55,14 @@ flowchart TD
      "Suzuka", "#JapaneseGP".
    - **Weak terms** are ambiguous and need support: "Max", "podium", "P1".
    - **Sources** are channel and account names: "FORMULA 1", "Sky Sports F1".
-4. You review and edit the lists. They are saved on the phone.
+4. The app tidies the lists: it drops repeats that the matcher would treat as
+   one term ("Japanese GP", "#JapaneseGP"), entries with no letter or digit,
+   and weak terms that are also strong.
+5. You review and edit the lists. They are saved on the phone.
+
+The LLM is asked for the lists as JSON in its answer. The request does not
+use the API's structured outputs, because Anthropic documents them as
+incompatible with citations, and web search always cites its sources.
 
 ### While a blocker is on
 
@@ -197,7 +204,7 @@ These are targets to check and revise after Phase 0, not measurements.
 | Blocker on, unwatched app in front | The service receives no events. |
 | Reading and matching one screen | Under 30 ms. |
 | Time from scroll settling to reveal | Under 150 ms. |
-| Network use | One call per blocker created. It is normally one request, and up to three when the model pauses during a long search. None while blocking. |
+| Network use | One call per blocker created. It is normally one request, and up to three when the model pauses during a long search. The reply is not streamed, so a request can take minutes; the app waits up to ten minutes for each. None while blocking. |
 
 ## Not in v1
 
