@@ -337,12 +337,31 @@ class SpoilerNotificationListener : NotificationListenerService() {
             }
 
         val otherTexts = buildList {
-            // The labels of the buttons.
-            addAll(
-                readPart(emptyList()) {
-                    notification.actions.orEmpty().mapNotNull { action -> action?.title?.toString() }
-                },
-            )
+            val actions: List<Notification.Action> =
+                readPart(emptyList()) { notification.actions.orEmpty().filterNotNull() }
+            for (action in actions) {
+                // The label of the button.
+                add(readPart("") { textOf(action.title) })
+                // A reply button opens a field under the notification. Its
+                // label is the hint in the field. Its choices are replies
+                // the app suggests, which Android shows as chips under the
+                // notification, ready to send with one tap: "Max won!?".
+                val inputs = readPart(emptyList()) { action.remoteInputs.orEmpty().filterNotNull() }
+                for (input in inputs) {
+                    add(readPart("") { textOf(input.label) })
+                    addAll(readPart(emptyList()) { textsOf(input.choices) })
+                }
+            }
+            // Not read: replies and actions suggested by the system's
+            // notification assistant, when the setting for suggested actions
+            // and replies is on. Android shows them like the app's own, but
+            // they are not in the notification. They are in this listener's
+            // Ranking (getSmartReplies and getSmartActions), and they may come
+            // after the notification itself, in onNotificationRankingUpdate.
+            // Reading them would mean passing the ranking to every place that
+            // reads a notification, and judging every notification again
+            // whenever the ranking changes.
+
             // What an app gives for a locked screen that hides the content.
             val publicExtras: Bundle? = readPart(null) { notification.publicVersion?.extras }
             add(text(Notification.EXTRA_TITLE, from = publicExtras))

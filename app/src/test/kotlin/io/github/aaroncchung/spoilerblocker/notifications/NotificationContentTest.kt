@@ -116,7 +116,8 @@ class NotificationContentTest {
             empty.copy(messages = listOf(NotificationContent.Message(sender = "Sam", text = spoiler))),
             empty.copy(tickerText = spoiler),
             empty.copy(pictureDescription = spoiler),
-            // For example a button, or the text for a locked screen.
+            // For example a button, a suggested reply, or the text for a
+            // locked screen.
             empty.copy(otherTexts = listOf("Reply", spoiler)),
         )
 
