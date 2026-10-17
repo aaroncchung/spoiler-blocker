@@ -28,7 +28,16 @@ related examples means nothing is known about misses.
 
 ## Where real data goes
 
-Put real examples in `eval/data/`. Git ignores that folder.
+Put real examples, and the blocker file that goes with them, in `eval/data/`:
+
+```
+./gradlew -q :eval:run --args="eval/data/blocker.json eval/data/examples.jsonl"
+```
+
+Git ignores everything in `eval/data/`. It also ignores every `.jsonl` file
+anywhere else in the repository, except the samples in `eval/sample/`, so an
+examples file saved in the wrong folder is not committed by mistake. A
+blocker file is only ignored in `eval/data/`.
 
 **Never commit real examples.** Titles, captions and notifications copied from
 a phone contain other people's names and messages, and this repository is
