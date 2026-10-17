@@ -102,11 +102,19 @@ cannot be listed, because no app was ever told that it existed.
 
 **Status.** While any blocker is on, a silent notification names the blockers
 that are on, so that a forgotten one stays visible. If notifications are not
-actually being hidden, because notification access is off, it says that
-instead. Swiped away, it comes back. Nothing extra keeps it there: Android
-itself keeps the notification listener running and starts it again after the
-phone restarts. Without notification access it only comes back when the app is
-opened.
+actually being hidden, it says that instead: when notification access is off,
+or when access is on but Android has not connected the notification listener.
+For the first ten seconds after the app's process starts, while Android is
+still connecting the listener, a missing listener is not warned about and the
+notification is left as it is. Swiped away, it comes back. Switched off in the
+system settings, for the whole app or only its "Blocking status" channel, it
+comes back when switched on again, and the blocker list shows a card while it
+is off. Nothing extra keeps it there: Android itself keeps the notification
+listener running and starts it again after the phone restarts. Without
+notification access it only comes back when the app is opened. While the
+process is not running, for example after Android ended it to free memory,
+nothing can update the notification, so it can say a blocker is on while
+nothing is hidden until Android starts the process again.
 
 **Screen.**
 
@@ -166,7 +174,7 @@ it is always possible to see why something was or was not blocked.
 | 9 | Terms are split into strong, weak and sources. | Proposed | Sources catch posts whose text gives nothing away. The weak tier stops common words from over-blocking. |
 | 10 | Only apps on a watch list are read. v1 watches YouTube, then Instagram. | Proposed | The service never sees banking or other apps, and it costs no battery elsewhere. |
 | 11 | Fail closed: cover while scrolling, reveal after checking. | Confirmed as the intent. Exact behaviour needs experiment. | Overlay position updates arrive late, so a box cannot reliably follow a moving post. |
-| 12 | A blocker stays on until switched off. | Confirmed | Owner's requirement. A status notification makes a forgotten blocker visible. |
+| 12 | A blocker stays on until switched off. | Confirmed | Owner's requirement. A status notification makes a forgotten blocker visible, and says when nothing is being hidden. |
 | 13 | Dismissed notifications are listed in the app. | Proposed | Silently losing a friend's message is worse than seeing later that one was hidden. |
 | 14 | The matcher is a separate plain-Kotlin module. | Proposed | It can be unit-tested on a PC without a phone or YouTube. |
 | 15 | No screen text is stored or sent anywhere in normal use. | Proposed | The service can read private content. Debug capture is opt-in, stays on the phone and is never committed. |
