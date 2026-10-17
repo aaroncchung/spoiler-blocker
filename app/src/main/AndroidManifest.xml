@@ -4,6 +4,8 @@
     <!--
         allowBackup is off and the extraction rules exclude everything: the app
         will hold the text of hidden notifications, which must stay on the phone.
+        Both are needed, because from Android 12 allowBackup="false" stops cloud
+        backup but not a device-to-device transfer to a new phone.
     -->
     <application
         android:name=".SpoilerBlockerApplication"
