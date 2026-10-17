@@ -25,8 +25,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Shows a notification for as long as a blocker is on, so that a forgotten
- * blocker is noticed (decision 12 in docs/ARCHITECTURE.md). The notification
- * also says so when notifications are not really being hidden (decision 17).
+ * blocker is noticed. If notifications are not really being hidden, the
+ * notification says that instead. This is decision 12 in docs/ARCHITECTURE.md.
  *
  * There is deliberately no foreground service behind it. A foreground service
  * is for keeping a process alive, and nothing here needs that. Android keeps
