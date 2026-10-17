@@ -63,6 +63,16 @@ class InputFilesTest {
         assertThrows(BadInputException::class.java) { parseBlocker("""{"strong":[],"strnog":[]}""") } // unknown key
     }
 
+    @Test
+    fun `a key given twice in a blocker file is refused`() {
+        // The JSON reader would keep ["b"] and drop ["a"] without a word.
+        val error = assertThrows(BadInputException::class.java) {
+            parseBlocker("""{"strong":["a"],"weak":["Max"],"strong":["b"]}""")
+        }
+
+        assertEquals("\"strong\" is given twice", error.message)
+    }
+
     // The examples file.
 
     @Test
@@ -140,6 +150,7 @@ class InputFilesTest {
             """{"label":"related","texts":"not a list"}""",
             """{"texts":["no label"]}""",
             """{"kind":"tweet","label":"related","texts":["a kind that does not exist"]}""",
+            """{"label":"related","label":"unrelated","texts":["a key given twice"]}""",
             """{"label":"related","texts":[]}""", // nothing to check
             """{"label":"related","texts":["", "  "]}""", // nothing to check either
         )
@@ -151,6 +162,32 @@ class InputFilesTest {
 
             assertTrue("\"${error.message}\" should start with the line number", error.message!!.startsWith("line 3: "))
         }
+    }
+
+    @Test
+    fun `a key given twice in an example is refused`() {
+        // The JSON reader would keep the last value of each without a word:
+        // the first would count the example as unrelated, the second would
+        // drop the real text.
+        val labelTwice = assertThrows(BadInputException::class.java) {
+            parseExamples("""{"label":"related","label":"unrelated","texts":["Rain at Suzuka"]}""")
+        }
+        val textsTwice = assertThrows(BadInputException::class.java) {
+            parseExamples(
+                """{"label":"related","texts":["fine"]}""" + "\n" +
+                    """{"label":"related","texts":["Rain at Suzuka"],"texts":["FORMULA 1"]}""",
+            )
+        }
+
+        assertEquals("line 1: \"label\" is given twice", labelTwice.message)
+        assertEquals("line 2: \"texts\" is given twice", textsTwice.message)
+    }
+
+    @Test
+    fun `a text that looks like a key is not a key given twice`() {
+        val examples = parseExamples("""{"label":"related","texts":["label","\"label\":\"unrelated\""],"note":"texts"}""")
+
+        assertEquals(listOf("label", "\"label\":\"unrelated\""), examples.single().texts)
     }
 
     @Test

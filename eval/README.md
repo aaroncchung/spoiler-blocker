@@ -53,7 +53,8 @@ One JSON object with the lists of one blocker:
 ```
 
 `breadth` is `"narrow"` or `"broad"`. Only `strong` is required. `weak` and
-`sources` default to empty lists and `breadth` to `"narrow"`.
+`sources` default to empty lists and `breadth` to `"narrow"`. Any other key,
+or a key that is given twice, stops the script with an error.
 
 ### Examples file
 
@@ -74,7 +75,8 @@ spread over several lines:
 | `note` | No | Anything you want to remember. It is printed with the example and the matcher never sees it. |
 
 Blank lines are skipped. Any other line that cannot be read stops the script
-with an error that names the line, and so does a key that is not in the table.
+with an error that names the line, and so does a key that is not in the table
+or a key that is given twice.
 
 The matcher looks for the blocker's sources in `sources` only. Where it looks
 for strong and weak terms depends on `kind`, and is the same as in the app:
