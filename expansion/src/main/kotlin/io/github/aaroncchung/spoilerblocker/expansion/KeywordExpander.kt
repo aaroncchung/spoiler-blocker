@@ -48,9 +48,11 @@ private const val MODEL = "claude-opus-5-5"
 /**
  * The most the model may write in one reply, counted in tokens (word pieces).
  * It has to cover the model's private thinking and its search queries as well
- * as the lists, which are the small part.
+ * as the lists, which are the small part. Only what the model writes is
+ * billed, so a high limit costs nothing by itself. It is not higher because
+ * the reply is not streamed, and a long one has to arrive within READ_TIMEOUT.
  */
-private const val MAX_TOKENS = 16_000
+private const val MAX_TOKENS = 32_000
 
 /** The anthropic-version header. It names the version of the API, not of the model. */
 private const val API_VERSION = "2023-06-01"
@@ -153,18 +155,22 @@ class KeywordExpander(
         return withContext(Dispatchers.IO) {
             try {
                 requestTerms(description.trim(), breadth)
+            } catch (e: NotConnectedException) {
+                // Nothing reached the API, so nothing was billed.
+                Failure(FailureKind.NO_NETWORK, "Could not reach the Claude API: ${detailOf(e)}")
             } catch (e: InterruptedIOException) {
                 // OkHttp's timeouts all arrive as this type or a subclass of
                 // it. post() turns one from before the connection was made
-                // into a NotConnectedException, which lands in the next branch.
-                Failure(
-                    FailureKind.TIMEOUT,
-                    "The Claude API did not answer in time. It may still have finished " +
-                        "the call and billed it, so trying again costs a second call.",
-                )
+                // into a NotConnectedException, which lands in the branch above.
+                Failure(FailureKind.TIMEOUT, "The Claude API did not answer in time. $MAY_HAVE_BEEN_BILLED")
             } catch (e: IOException) {
-                val detail = e.message ?: e.javaClass.simpleName
-                Failure(FailureKind.NO_NETWORK, "Could not reach the Claude API: $detail")
+                // The connection was made and then lost, as when a phone
+                // leaves its Wi-Fi during the wait. The request may have
+                // reached the API by then.
+                Failure(
+                    FailureKind.NO_NETWORK,
+                    "The connection to the Claude API was lost: ${detailOf(e)}. $MAY_HAVE_BEEN_BILLED",
+                )
             }
         }
     }
@@ -173,6 +179,7 @@ class KeywordExpander(
         // Built once and reused, so that a continued turn repeats the first
         // request word for word. The API checks that it does.
         val question = userMessage(description, breadth, LocalDate.now(clock))
+        // Everything the model has written in this turn so far.
         var pausedTurn: JsonArray? = null
 
         // "return" inside repeat's braces leaves requestTerms, not just the braces.
@@ -185,12 +192,17 @@ class KeywordExpander(
             } catch (e: IllegalArgumentException) {
                 return Failure(FailureKind.BAD_REPLY, "The reply was not a Messages API response.")
             }
-            if (message.stopReason != "pause_turn") return readFinishedTurn(message)
+            // A reply to a continued turn holds only what is new, so it is
+            // added to what came before.
+            val turnSoFar = JsonArray(pausedTurn.orEmpty() + message.content)
+            if (message.stopReason != "pause_turn") return readFinishedTurn(message, turnSoFar)
 
             // The searches run in a loop on Anthropic's servers. When a turn
             // needs many steps the API hands it back unfinished ("paused").
-            // Sending its content back unchanged makes the API carry on.
-            pausedTurn = message.content
+            // Sending its content back unchanged makes the API carry on. A
+            // continued turn can pause again, and then everything written so
+            // far goes back, or the first part would be lost.
+            pausedTurn = turnSoFar
         }
         return Failure(
             FailureKind.BAD_REPLY,
@@ -270,10 +282,13 @@ class KeywordExpander(
             return call.executeAsync().use { response ->
                 HttpReply(response.code, response.body.string())
             }
-        } catch (e: InterruptedIOException) {
-            // OkHttp reports a timeout while connecting in the same way as
-            // one while waiting for the answer. On Wi-Fi with no internet
-            // behind it, connecting is what times out, and that is no network.
+        } catch (e: IOException) {
+            // Whether the call got as far as a connection decides what a
+            // failure means: before one, nothing was sent and nothing billed.
+            // It also tells two timeouts apart. OkHttp reports one while
+            // connecting in the same way as one while waiting for the answer.
+            // On Wi-Fi with no internet behind it, connecting is what times
+            // out, and that is no network.
             if (!watch.connected) throw NotConnectedException(e)
             throw e
         }
@@ -299,9 +314,13 @@ class KeywordExpander(
         return Failure(kind, message)
     }
 
-    /** A reply with HTTP 200 can still be a refusal or half an answer. "stop_reason" says which. */
-    private fun readFinishedTurn(message: ApiMessage): ExpansionResult = when (message.stopReason) {
-        "end_turn" -> readTerms(message.content)
+    /**
+     * A reply with HTTP 200 can still be a refusal or half an answer. "stop_reason" says which.
+     *
+     * @param turn everything the model wrote in this turn, with the parts of a paused turn.
+     */
+    private fun readFinishedTurn(message: ApiMessage, turn: JsonArray): ExpansionResult = when (message.stopReason) {
+        "end_turn" -> readTerms(turn)
 
         "refusal" -> Failure(
             FailureKind.REFUSED,
@@ -384,6 +403,12 @@ class KeywordExpander(
 
 private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
+/** Said in a failure once a request may have reached the API. */
+private const val MAY_HAVE_BEEN_BILLED =
+    "It may still have finished the call and billed it, so trying again costs a second call."
+
+private fun detailOf(e: IOException): String = e.message ?: e.javaClass.simpleName
+
 internal fun defaultHttpClient(): OkHttpClient =
     OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT)
@@ -413,7 +438,7 @@ private class ConnectionWatch : EventListener() {
     }
 }
 
-/** A call that failed before it had a connection to the API. expand() reports it as no network. */
+/** A call that failed before it had a connection to the API, so nothing was sent or billed. */
 private class NotConnectedException(cause: IOException) : IOException(cause.message, cause)
 
 // The parts of the API's replies that this code reads. Each class matches the

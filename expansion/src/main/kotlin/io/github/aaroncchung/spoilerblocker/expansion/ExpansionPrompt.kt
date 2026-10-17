@@ -31,9 +31,10 @@ internal val SYSTEM_PROMPT: String = """
     Terms are looked for in a YouTube video's title, an Instagram post's
     caption, and a notification's title and text. The text is cut into words
     wherever there is anything other than a letter or a digit, at a capital
-    after a small letter, at the last of several capitals when a small letter
-    follows it, and where letters meet digits, so "#JapaneseGP2026" is the
-    words japanese, gp, 2026 and "#GPHighlights" is gp, highlights. A term is
+    after a small letter and where letters meet digits. The last of several
+    capitals is a word of its own when a small letter follows it. So
+    "#JapaneseGP2026" is the words japanese, gp, 2026, "#GPHighlights" is gp,
+    h, ighlights and "@NBAonTNT" is nb, a, on, tnt. A term is
     found when its letters and digits, run together, are exactly one word of
     the text or several words in a row. Capitals and accents are ignored. What
     follows from that:
@@ -43,6 +44,8 @@ internal val SYSTEM_PROMPT: String = """
       "Japanese G.P.", "#JapaneseGP" and "#japanesegp" alike. List it once.
     - A term has to fill whole words. "Max" is found in "Max's lap" and in
       "#MaxVerstappen", but not in "maximum".
+    - Capitals run into small letters are found both ways: "NBA" and "TNT" in
+      "@NBAonTNT", "ESPN" and "Cricinfo" in "@ESPNcricinfo".
     - Letters of one case run together are a single word. "#maxverstappen",
       "#MAXVERSTAPPEN" and the handle "maxverstappen1" are found by "Max
       Verstappen", not by "Verstappen". "#suzukacircuit" is found by "Suzuka

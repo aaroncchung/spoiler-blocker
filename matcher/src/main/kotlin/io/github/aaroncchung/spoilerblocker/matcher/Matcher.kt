@@ -114,11 +114,13 @@ sealed interface Reason {
  * that are more than a letter with an accent count as their plain spelling:
  * "Odegaard" is found in "Ødegaard", "Strasse" in "Straße". Anything that is
  * not a letter or a digit separates words. Inside a hashtag or a name, a new
- * word also starts at a capital after a small letter, at the last of several
- * capitals when a small letter follows it, and wherever letters meet digits:
- * "#JapaneseGP2026" is the words japanese, gp, 2026, and "#GPHighlights" is
- * gp, highlights. A small "s" with no letter after it makes a plural and
- * stays with the capitals: "GPs" is one word.
+ * word also starts at a capital after a small letter and wherever letters
+ * meet digits. The last of several capitals is a word of its own when a
+ * small letter follows it, because it could end the capitals or start the
+ * next word: "#JapaneseGP2026" is the words japanese, gp, 2026,
+ * "#GPHighlights" is gp, h, ighlights and "@NBAonTNT" is nb, a, on, tnt. A
+ * small "s" with no letter after it makes a plural and stays with the
+ * capitals: "GPs" is one word.
  *
  * So the spaces, punctuation and capitals inside a term do not matter. The
  * term "Japanese GP" is found in "Japanese G.P.", "#JapaneseGP",
