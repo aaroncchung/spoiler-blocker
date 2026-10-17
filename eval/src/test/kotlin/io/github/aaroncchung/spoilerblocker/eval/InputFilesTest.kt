@@ -3,6 +3,7 @@ package io.github.aaroncchung.spoilerblocker.eval
 import io.github.aaroncchung.spoilerblocker.matcher.BlockerTerms
 import io.github.aaroncchung.spoilerblocker.matcher.Breadth
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -61,6 +62,19 @@ class InputFilesTest {
         assertThrows(BadInputException::class.java) { parseBlocker("""{"weak":["Max"]}""") } // no "strong"
         assertThrows(BadInputException::class.java) { parseBlocker("""{"strong":"Suzuka"}""") } // not a list
         assertThrows(BadInputException::class.java) { parseBlocker("""{"strong":[],"strnog":[]}""") } // unknown key
+    }
+
+    @Test
+    fun `an error in a blocker file says what is wrong, without the file or hints for programmers`() {
+        val error = assertThrows(BadInputException::class.java) {
+            parseBlocker("""{"strong":["Suzuka"],"strnog":["Max"]}""")
+        }
+        val message = error.message!!
+
+        assertTrue(message, message.contains("unknown key 'strnog'"))
+        assertFalse(message, message.contains("Suzuka"))
+        assertFalse(message, message.contains("ignoreUnknownKeys"))
+        assertFalse(message, message.contains("\n"))
     }
 
     @Test
@@ -161,6 +175,28 @@ class InputFilesTest {
             }
 
             assertTrue("\"${error.message}\" should start with the line number", error.message!!.startsWith("line 3: "))
+        }
+    }
+
+    @Test
+    fun `an error says what is wrong and where, without the example's text or hints for programmers`() {
+        // Each bad line, with what its error must still say.
+        val badLines = mapOf(
+            """{"label":"related","text":["Rain at Suzuka"]}""" to "unknown key 'text'",
+            """{"label":"related","texts":["Rain at Suzuka"}""" to "offset 44",
+            """{"label":"related","texts":["Rain at Suzuka"],}""" to "Trailing comma",
+            """{"label":"related","texts":["Rain at Suzuka",null]}""" to "'null'",
+        )
+
+        for ((bad, expected) in badLines) {
+            val message = assertThrows(bad, BadInputException::class.java) { parseExamples(bad) }.message!!
+
+            assertTrue(message, message.startsWith("line 1: "))
+            assertTrue(message, message.contains(expected))
+            assertFalse(message, message.contains("Rain at Suzuka"))
+            // Every hint kotlinx.serialization gives says how to change the 'Json {}' builder.
+            assertFalse(message, message.contains("Json {}"))
+            assertFalse(message, message.contains("\n"))
         }
     }
 

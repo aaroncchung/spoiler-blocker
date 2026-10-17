@@ -71,7 +71,7 @@ fun parseBlocker(text: String): BlockerTerms {
     val file = try {
         Json.decodeFromString<BlockerFile>(text)
     } catch (e: IllegalArgumentException) {
-        throw BadInputException(e.message ?: "not a blocker file")
+        throw BadInputException(whatIsWrong(e))
     }
     val repeatedKey = firstRepeatedKey(text)
     if (repeatedKey != null) throw BadInputException("\"$repeatedKey\" is given twice")
@@ -99,7 +99,7 @@ fun parseExamples(text: String): List<Example> {
         val example = try {
             Json.decodeFromString<Example>(line)
         } catch (e: IllegalArgumentException) {
-            throw BadInputException("line $lineNumber: ${e.message}")
+            throw BadInputException("line $lineNumber: ${whatIsWrong(e)}")
         }
         val repeatedKey = firstRepeatedKey(line)
         if (repeatedKey != null) {
@@ -114,6 +114,19 @@ fun parseExamples(text: String): List<Example> {
     }
     return examples
 }
+
+/**
+ * What is wrong, from an error thrown by Json.decodeFromString. It is the
+ * first line of the error's message, which says what and where, such as
+ * "Unexpected JSON token at offset 20: Encountered an unknown key 'text' at path: $".
+ *
+ * The lines after it are left out. One repeats the input, which for an
+ * example is its whole line again. The others are hints for programmers,
+ * such as "Use 'ignoreUnknownKeys = true'", and following them would switch
+ * off the strictness that this file relies on.
+ */
+private fun whatIsWrong(e: IllegalArgumentException): String =
+    e.message?.substringBefore('\n') ?: "it is not in the expected format"
 
 /**
  * The first key that is written twice in the JSON object [json], or null if
