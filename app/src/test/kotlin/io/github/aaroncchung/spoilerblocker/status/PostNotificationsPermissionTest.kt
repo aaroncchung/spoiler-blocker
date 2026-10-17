@@ -55,11 +55,17 @@ class PostNotificationsPermissionTest {
     }
 
     @Test
-    fun `a dialog closed without an answer shows the card and is not shown again`() {
+    fun `a dialog closed without an answer shows the card, and the dialog again next time`() {
         // Android does not count this as a refusal, so refusedBefore stays false.
         assertEquals(
             PostPermissionStep.SHOW_CARD,
             step(refusedBefore = false, request = PostPermissionRequest.ANSWERED),
+        )
+        // The next time the blocker list is opened, the request starts again
+        // from NOT_ASKED, and so the owner is asked again.
+        assertEquals(
+            PostPermissionStep.ASK,
+            step(refusedBefore = false, request = PostPermissionRequest.NOT_ASKED),
         )
     }
 

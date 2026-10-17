@@ -79,8 +79,11 @@ enum class PostPermissionStep {
  * notifications.
  *
  * The owner is asked at the moment the permission starts to matter: when a
- * blocker is on. Android's dialog is shown once. After a refusal there is
- * only the card, which stays for as long as a blocker is on.
+ * blocker is on. Each time the blocker list is opened, Android's dialog is
+ * shown at most once, and after a refusal not at all: then there is only the
+ * card, which stays for as long as a blocker is on. A dialog closed without
+ * an answer is not a refusal. The card shows until the list is next opened,
+ * and then the dialog shows again.
  *
  * The card also shows when the app may post but the owner has switched off
  * the status notification's channel. The dialog would be no use then: it is
