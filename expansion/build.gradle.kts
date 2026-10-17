@@ -33,6 +33,10 @@ tasks.register<JavaExec>("run") {
 }
 
 dependencies {
+    // The matcher's own rule for when two terms are the same, which is used
+    // to tidy the lists. "implementation" because no matcher type appears in
+    // this module's public classes.
+    implementation(project(":matcher"))
     // "api" rather than "implementation" because OkHttpClient appears in
     // KeywordExpander's constructor, so the app needs to see the type too.
     api(libs.okhttp)

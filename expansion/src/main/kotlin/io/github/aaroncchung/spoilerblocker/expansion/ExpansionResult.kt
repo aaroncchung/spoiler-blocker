@@ -4,8 +4,8 @@ package io.github.aaroncchung.spoilerblocker.expansion
  * How wide a blocker reaches. For the description "2026 Japanese Grand Prix",
  * [NARROW] means that race and [BROAD] means all of Formula 1.
  *
- * The matcher module has its own breadth type. This module does not depend on
- * the matcher, so the app converts between the two.
+ * The matcher module has its own breadth type. This module uses the matcher
+ * only inside, to tidy the lists, so the app converts between the two.
  */
 enum class Breadth { NARROW, BROAD }
 

@@ -577,6 +577,14 @@ class KeywordExpanderTest {
 
         assertFailure(FailureKind.NOTHING_FOUND, expand())
     }
+
+    @Test
+    fun `lists of nothing but symbols mean nothing was found`() {
+        // The matcher could never find any of these, so they are not a result.
+        reply(message(text("""{"strong": ["🏁", "!!!"], "weak": ["—"], "sources": ["@"]}""")))
+
+        assertFailure(FailureKind.NOTHING_FOUND, expand())
+    }
 }
 
 // ---- Replies written by hand, in the shapes Anthropic documents ----
