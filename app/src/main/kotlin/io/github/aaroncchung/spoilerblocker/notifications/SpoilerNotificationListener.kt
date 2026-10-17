@@ -290,9 +290,11 @@ class SpoilerNotificationListener : NotificationListenerService() {
                 // The disk: it is full, for example.
                 Log.w(TAG, "Could not store hidden notifications (${e.javaClass.simpleName})")
             } catch (e: IllegalStateException) {
-                // The file was written by a newer build of the app. The
-                // hidden list screen still fails loudly on such a file,
+                // The file was written by a newer build of the app. Opening
+                // the hidden list screen crashes the app on such a file,
                 // which is the signal meant for that developer-only case.
+                // The start screen only leaves out the count of hidden
+                // notifications (see BlockerListViewModel).
                 Log.w(TAG, "Could not store hidden notifications (${e.javaClass.simpleName})")
             }
         }
