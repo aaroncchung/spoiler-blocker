@@ -90,8 +90,8 @@ class StatusNotifier(private val context: Context) {
      *
      * Call this when something changed that this class does not follow by
      * itself: notification access was given or taken away, the listener
-     * connected or disconnected, the owner allowed the app to post
-     * notifications, or the notification was swiped away.
+     * connected or disconnected, the owner switched the app's notifications
+     * on, or the notification was swiped away.
      */
     @MainThread
     fun refresh() {
@@ -113,9 +113,9 @@ class StatusNotifier(private val context: Context) {
             return
         }
         // Posting under the id of a notification that is showing replaces
-        // it. If the owner has not allowed the app to post notifications,
-        // Android drops this without an error, and the blocker list shows a
-        // card about it.
+        // it. If the owner has not allowed the app to post notifications, or
+        // has switched off this one's channel, Android drops this without an
+        // error, and the blocker list shows a card about it.
         notificationManager.notify(NOTIFICATION_ID, build(content))
     }
 
@@ -216,13 +216,13 @@ class StatusNotifier(private val context: Context) {
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
     }
 
-    private companion object {
+    companion object {
         // The channel's id is stored by Android together with what the owner
         // chose for the channel, so it must stay the same from build to build.
         const val CHANNEL_ID = "status"
 
         // Any number will do. The app has only this one notification.
-        const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_ID = 1
     }
 }
 
@@ -250,5 +250,34 @@ class StatusNotificationDismissedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val application = context.applicationContext as SpoilerBlockerApplication
         application.container.statusNotifier.refresh()
+    }
+}
+
+/**
+ * Puts the status notification back after the owner switched the app's
+ * notifications, or only the channel of the status notification, off and on
+ * again in the system settings.
+ *
+ * Switching off removes the notification, and switching on does not bring it
+ * back. Android announces both with a broadcast that goes to this app alone,
+ * and starts the process to deliver it if need be. After switching off,
+ * refresh() posts in vain, which does no harm: Android drops the notification.
+ */
+class NotificationsSwitchedReceiver : BroadcastReceiver() {
+
+    // As in StatusNotificationDismissedReceiver: if Android had to start
+    // the process to deliver this, refresh() does nothing, and the
+    // StatusNotifier posts once the blockers have been read.
+    override fun onReceive(context: Context, intent: Intent) {
+        // Only Android can send to this receiver, and only these two, so the
+        // check changes nothing today. Lint asks it of every receiver of a
+        // system broadcast, in case the receiver is ever exported.
+        when (intent.action) {
+            NotificationManager.ACTION_APP_BLOCK_STATE_CHANGED,
+            NotificationManager.ACTION_NOTIFICATION_CHANNEL_BLOCK_STATE_CHANGED -> {
+                val application = context.applicationContext as SpoilerBlockerApplication
+                application.container.statusNotifier.refresh()
+            }
+        }
     }
 }

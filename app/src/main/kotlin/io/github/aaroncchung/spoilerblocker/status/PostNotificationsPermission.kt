@@ -12,9 +12,24 @@ import android.provider.Settings
 // can still allow it, on the app's notification screen in the system
 // settings.
 
-/** True if the owner lets the app post notifications. */
+/**
+ * True if the owner lets the app post notifications. This is about the app
+ * as a whole: see also [isStatusChannelBlocked].
+ */
 fun canPostNotifications(context: Context): Boolean =
     context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+
+/**
+ * True if the owner has switched off the channel of the status notification,
+ * "Blocking status" in the system settings. The app may still post, but
+ * Android drops whatever is posted to that channel.
+ */
+fun isStatusChannelBlocked(context: Context): Boolean =
+    context.getSystemService(NotificationManager::class.java)
+        // Null before the channel is created, which StatusNotifier does
+        // when the process starts.
+        .getNotificationChannel(StatusNotifier.CHANNEL_ID)
+        ?.importance == NotificationManager.IMPORTANCE_NONE
 
 /**
  * True if the owner has refused the permission: in the dialog, or by
@@ -28,12 +43,21 @@ fun canPostNotifications(context: Context): Boolean =
 fun wasPostPermissionRefused(activity: Activity): Boolean =
     activity.shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
 
-/** Opens the system settings screen for this app's notifications. */
-fun openAppNotificationSettings(context: Context) {
-    context.startActivity(
+/**
+ * Opens the system settings screen where the owner can switch the status
+ * notification back on: the screen of its channel if only that is off, or
+ * else the screen for all of this app's notifications.
+ */
+fun openStatusNotificationSettings(context: Context) {
+    val intent = if (canPostNotifications(context) && isStatusChannelBlocked(context)) {
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, StatusNotifier.CHANNEL_ID)
+    } else {
         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-    )
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+    }
+    context.startActivity(intent)
 }
 
 /** How far the blocker list has got with asking for the permission, since it was opened. */
@@ -58,16 +82,25 @@ enum class PostPermissionStep {
  * blocker is on. Android's dialog is shown once. After a refusal there is
  * only the card, which stays for as long as a blocker is on.
  *
+ * The card also shows when the app may post but the owner has switched off
+ * the status notification's channel. The dialog would be no use then: it is
+ * about the app as a whole, and Android answers "yes" without showing it.
+ *
+ * @param canPost see [canPostNotifications].
+ * @param statusChannelBlocked see [isStatusChannelBlocked].
  * @param refusedBefore see [wasPostPermissionRefused].
  */
 fun postPermissionStep(
     blockerOn: Boolean,
     canPost: Boolean,
+    statusChannelBlocked: Boolean,
     refusedBefore: Boolean,
     request: PostPermissionRequest,
 ): PostPermissionStep = when {
     // With no blocker on there is no status notification to post.
-    !blockerOn || canPost -> PostPermissionStep.NOTHING
+    !blockerOn -> PostPermissionStep.NOTHING
+    canPost && statusChannelBlocked -> PostPermissionStep.SHOW_CARD
+    canPost -> PostPermissionStep.NOTHING
     // The dialog is in front. The card would show through behind it.
     request == PostPermissionRequest.ASKING -> PostPermissionStep.NOTHING
     request == PostPermissionRequest.NOT_ASKED && !refusedBefore -> PostPermissionStep.ASK

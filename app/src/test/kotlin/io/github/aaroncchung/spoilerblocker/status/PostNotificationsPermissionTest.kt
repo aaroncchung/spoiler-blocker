@@ -9,9 +9,10 @@ class PostNotificationsPermissionTest {
     private fun step(
         blockerOn: Boolean = true,
         canPost: Boolean = false,
+        statusChannelBlocked: Boolean = false,
         refusedBefore: Boolean = false,
         request: PostPermissionRequest = PostPermissionRequest.NOT_ASKED,
-    ) = postPermissionStep(blockerOn, canPost, refusedBefore, request)
+    ) = postPermissionStep(blockerOn, canPost, statusChannelBlocked, refusedBefore, request)
 
     @Test
     fun `the owner is asked when a blocker is on and nothing was asked yet`() {
@@ -27,6 +28,7 @@ class PostNotificationsPermissionTest {
             PostPermissionStep.NOTHING,
             step(blockerOn = false, request = PostPermissionRequest.ANSWERED),
         )
+        assertEquals(PostPermissionStep.NOTHING, step(blockerOn = false, canPost = true, statusChannelBlocked = true))
     }
 
     @Test
@@ -58,6 +60,26 @@ class PostNotificationsPermissionTest {
         assertEquals(
             PostPermissionStep.SHOW_CARD,
             step(refusedBefore = false, request = PostPermissionRequest.ANSWERED),
+        )
+    }
+
+    @Test
+    fun `when only the status channel is off the card shows and the owner is not asked`() {
+        // Android's dialog is about the app as a whole, which may post.
+        assertEquals(PostPermissionStep.SHOW_CARD, step(canPost = true, statusChannelBlocked = true))
+        assertEquals(
+            PostPermissionStep.SHOW_CARD,
+            step(canPost = true, statusChannelBlocked = true, request = PostPermissionRequest.ANSWERED),
+        )
+    }
+
+    @Test
+    fun `when the app may not post and the channel is off too, the owner is asked first`() {
+        assertEquals(PostPermissionStep.ASK, step(statusChannelBlocked = true))
+        // Allowed in the dialog: the channel is still off.
+        assertEquals(
+            PostPermissionStep.SHOW_CARD,
+            step(canPost = true, statusChannelBlocked = true, request = PostPermissionRequest.ANSWERED),
         )
     }
 }
