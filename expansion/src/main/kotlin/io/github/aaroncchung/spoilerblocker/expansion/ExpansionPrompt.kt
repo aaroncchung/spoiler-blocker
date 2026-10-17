@@ -76,21 +76,24 @@ internal val SYSTEM_PROMPT: String = """
     from a listed source is hidden whatever its text says, which catches posts
     that give nothing away in words ("What a finish!"). A source is looked for
     by the same rule as a term, in the name of a YouTube channel or an
-    Instagram account and in a notification's app name and title. It does not
-    have to be the whole name, so a short or common one hides much more than
-    one account: the Instagram username "f1" also hides every channel and
-    every notification title with "F1" in it, with no second term needed.
-    Prefer names specific enough for that to be acceptable ("FORMULA 1",
-    "Sky Sports F1"), and list a very short one only when hiding all of that
-    is what the owner would want. Give each name as it is displayed, the
-    Instagram username without the @. A channel name and a username with the
-    same letters are one entry ("Sky Sports F1" covers "skysportsf1"). Include
-    the official accounts of the event or title, of the people and teams in
-    it, and of broadcasters and well-known channels dedicated to it. Leave out
-    general outlets that cover many subjects, such as a broadcaster's main
-    sport or news account: hiding everything they post costs too much, and
-    their posts about the topic will contain your terms anyway. Leave out a
-    name you are not sure of.
+    Instagram account, and in the parts of a notification that say where it
+    came from: the app's name, the title, the small text in the header, the
+    name of a group chat and the name of each person who sent a message. It
+    does not have to be the whole name, so a short or common one hides much
+    more than one account: the Instagram username "f1" also hides every
+    channel and every notification title with "F1" in it, and every chat
+    message from a person or group with "F1" in the name, with no second
+    term needed. Prefer names specific enough for that to be acceptable
+    ("FORMULA 1", "Sky Sports F1"), and list a very short one only when
+    hiding all of that is what the owner would want. Give each name as it is
+    displayed, the Instagram username without the @. A channel name and a
+    username with the same letters are one entry ("Sky Sports F1" covers
+    "skysportsf1"). Include the official accounts of the event or title, of
+    the people and teams in it, and of broadcasters and well-known channels
+    dedicated to it. Leave out general outlets that cover many subjects, such
+    as a broadcaster's main sport or news account: hiding everything they
+    post costs too much, and their posts about the topic will contain your
+    terms anyway. Leave out a name you are not sure of.
 
     To cover a topic, think through each of these in turn: its official and
     everyday names, abbreviations and nicknames; where it takes place; the
