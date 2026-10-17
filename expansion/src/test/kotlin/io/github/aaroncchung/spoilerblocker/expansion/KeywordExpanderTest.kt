@@ -116,7 +116,7 @@ class KeywordExpanderTest {
     }
 
     @Test
-    fun `asks for the model, web search and an answer in JSON`() {
+    fun `asks for the model, web search and the effort, and no answer format`() {
         reply(message(text(SUZUKA_TERMS)))
 
         expand()
@@ -146,29 +146,9 @@ class KeywordExpanderTest {
             ),
             body["tools"],
         )
-        assertEquals(
-            parse(
-                """
-                {
-                  "effort": "medium",
-                  "format": {
-                    "type": "json_schema",
-                    "schema": {
-                      "type": "object",
-                      "properties": {
-                        "strong": {"type": "array", "items": {"type": "string"}},
-                        "weak": {"type": "array", "items": {"type": "string"}},
-                        "sources": {"type": "array", "items": {"type": "string"}}
-                      },
-                      "required": ["strong", "weak", "sources"],
-                      "additionalProperties": false
-                    }
-                  }
-                }
-                """,
-            ),
-            body["output_config"],
-        )
+        // No "format": structured outputs cannot be used with web search,
+        // whose answers always carry citations.
+        assertEquals(parse("""{"effort": "medium"}"""), body["output_config"])
         assertEquals(JsonPrimitive("default"), body["fallbacks"])
     }
 
@@ -227,27 +207,58 @@ class KeywordExpanderTest {
     }
 
     @Test
-    fun `joins an answer that arrives as several text blocks`() {
-        // Text that cites a search result comes back in pieces, one block per piece.
-        val firstHalf = """{"type": "text", "text": "{\"strong\": [\"Suzuka\"], \"weak\": [\"po"}"""
-        val secondHalf = """
-            {
-              "type": "text",
-              "text": "dium\"], \"sources\": []}",
-              "citations": [{
-                "type": "web_search_result_location",
-                "url": "https://example.com/japanese-gp",
-                "title": "Japanese Grand Prix",
-                "encrypted_index": "Eo8BCioIAhgBIiQyYjQ0OWJmZi1lNm",
-                "cited_text": "The race is held at Suzuka."
-              }]
-            }
-        """
-        reply(message("$WEB_SEARCH_BLOCKS, $firstHalf, $secondHalf"))
+    fun `joins an answer whose citations split it into several text blocks`() {
+        // The API gives cited words a text block of their own, with the
+        // citation attached, between blocks of the uncited text around them.
+        val blocks = listOf(
+            WEB_SEARCH_BLOCKS,
+            text("""Here are the lists. {"strong": ["Japanese Grand Prix", """),
+            citedText("\"Suzuka\""),
+            text("""], "weak": ["podium"], "sources": []}"""),
+        )
+        reply(message(blocks.joinToString(", ")))
 
         val result = expand()
 
-        assertEquals(Success(ExpandedTerms(listOf("Suzuka"), listOf("podium"), emptyList())), result)
+        val expected = ExpandedTerms(listOf("Japanese Grand Prix", "Suzuka"), listOf("podium"), emptyList())
+        assertEquals(Success(expected), result)
+    }
+
+    @Test
+    fun `reads an answer in a code fence`() {
+        reply(message(text("```json\n$SUZUKA_TERMS\n```")))
+
+        assertEquals(Success(SUZUKA), expand())
+    }
+
+    @Test
+    fun `reads an answer with a sentence before and after it`() {
+        reply(message(text("Here are the lists you asked for.\n\n$SUZUKA_TERMS\n\nI left out the other races.")))
+
+        assertEquals(Success(SUZUKA), expand())
+    }
+
+    @Test
+    fun `an answer with no JSON object in it is a bad reply`() {
+        reply(message(text("I could not find enough about this to write the lists.")))
+
+        val failure = assertFailure(FailureKind.BAD_REPLY, expand())
+
+        assertEquals("The reply did not contain one JSON object that could be read.", failure.message)
+    }
+
+    @Test
+    fun `an answer with two JSON objects in it is a bad reply`() {
+        // Which one is the answer cannot be told, so neither is used.
+        val twoAnswers = """
+            A first attempt: {"strong": ["Suzuka"], "weak": [], "sources": []}
+            And the final lists: $SUZUKA_TERMS
+        """
+        reply(message(text(twoAnswers)))
+
+        val failure = assertFailure(FailureKind.BAD_REPLY, expand())
+
+        assertEquals("The reply did not contain one JSON object that could be read.", failure.message)
     }
 
     @Test
@@ -562,6 +573,9 @@ private const val API_KEY = "sk-ant-test-0123456789"
 
 private const val SUZUKA_TERMS = """{"strong": ["Suzuka"], "weak": ["podium"], "sources": ["FORMULA 1"]}"""
 
+/** What [SUZUKA_TERMS] is read as. */
+private val SUZUKA = ExpandedTerms(listOf("Suzuka"), listOf("podium"), listOf("FORMULA 1"))
+
 private fun parse(json: String) = Json.parseToJsonElement(json)
 
 /** A successful reply. [content] is the blocks that go inside its "content" list. */
@@ -581,6 +595,21 @@ private fun message(content: String, stopReason: String = "end_turn", stopDetail
 
 /** A text block. JsonPrimitive adds the quotes and escapes the quotes inside. */
 private fun text(text: String) = """{"type": "text", "text": ${JsonPrimitive(text)}}"""
+
+/** A text block that cites a search result. Web search attaches citations like this. */
+private fun citedText(text: String) = """
+    {
+      "type": "text",
+      "text": ${JsonPrimitive(text)},
+      "citations": [{
+        "type": "web_search_result_location",
+        "url": "https://example.com/japanese-gp",
+        "title": "Japanese Grand Prix",
+        "encrypted_index": "Eo8BCioIAhgBIiQyYjQ0OWJmZi1lNm",
+        "cited_text": "The race is held at Suzuka."
+      }]
+    }
+"""
 
 /** An error reply, as sent with an HTTP status of 400 or above. */
 private const val ERROR_BODY = """

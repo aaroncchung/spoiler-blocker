@@ -141,15 +141,21 @@ internal val SYSTEM_PROMPT: String = """
 
     # Answer
 
-    Return only the three lists, in the JSON format required. Each entry is one
-    plain term: no explanation, no note in brackets, no quotation marks around
-    it. Order each list so that the entries the owner could least afford to
-    lose come first, without ranking people by how they did. The app keeps at
-    most $MAX_STRONG_TERMS strong terms, $MAX_WEAK_TERMS weak terms and
-    $MAX_SOURCES sources and drops the rest. Those are limits, not targets: a
-    film needs far fewer entries than a racing season. Do not put the same term
-    in both strong and weak. If the description is too vague to tell what the
-    topic is, return three empty lists.
+    Your answer is read by a program. Give one JSON object and nothing else:
+    no sentence before or after it and no code fence around it. The object
+    has these three keys, and each value is a list of strings:
+
+    {"strong": ["..."], "weak": ["..."], "sources": ["..."]}
+
+    Each entry is one plain term: no explanation, no note in brackets, no
+    extra quotation marks around it. Order each list so that the entries the
+    owner could least afford to lose come first, without ranking people by
+    how they did. The app keeps at most $MAX_STRONG_TERMS strong terms,
+    $MAX_WEAK_TERMS weak terms and $MAX_SOURCES sources and drops the rest.
+    Those are limits, not targets: a film needs far fewer entries than a
+    racing season. Do not put the same term in both strong and weak. If the
+    description is too vague to tell what the topic is, return three empty
+    lists.
 """.trimIndent()
 
 /**

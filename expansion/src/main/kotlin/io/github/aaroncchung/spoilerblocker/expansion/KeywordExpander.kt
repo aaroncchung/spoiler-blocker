@@ -19,6 +19,7 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -31,8 +32,8 @@ import okhttp3.coroutines.executeAsync
 // ---------------------------------------------------------------------------
 // What is asked of the Claude API. Everything worth tuning is in this block.
 // The request and reply shapes follow Anthropic's documentation for the
-// Messages API, the web search tool and structured outputs, as read on
-// 2026-10-05: https://platform.claude.com/docs/en/api/messages/create
+// Messages API and the web search tool, as read on 2026-10-05:
+// https://platform.claude.com/docs/en/api/messages/create
 // ---------------------------------------------------------------------------
 
 // KeywordExpanderTest spells out the strings below a second time, so that a
@@ -84,27 +85,6 @@ private val READ_TIMEOUT: Duration = Duration.ofMinutes(4)
 // that is only slow is not affected: the server answers pings while the model
 // is still working.
 private val PING_INTERVAL: Duration = Duration.ofSeconds(30)
-
-/**
- * The shape the model's final answer must have. The API guarantees a reply
- * that fits a schema sent this way ("structured outputs"), so the answer can
- * be read by code. JSON Schema has no supported way to limit how long a list
- * is, which is why the limits are in the prompt and in cleanUp().
- */
-private val TERMS_SCHEMA = Json.parseToJsonElement(
-    """
-    {
-      "type": "object",
-      "properties": {
-        "strong":  {"type": "array", "items": {"type": "string"}},
-        "weak":    {"type": "array", "items": {"type": "string"}},
-        "sources": {"type": "array", "items": {"type": "string"}}
-      },
-      "required": ["strong", "weak", "sources"],
-      "additionalProperties": false
-    }
-    """,
-)
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
@@ -240,10 +220,11 @@ class KeywordExpander(
         }
         putJsonObject("output_config") {
             put("effort", EFFORT)
-            putJsonObject("format") {
-                put("type", "json_schema")
-                put("schema", TERMS_SCHEMA)
-            }
+            // There is no "format" here. Structured outputs would make the API
+            // guarantee an answer in JSON, but Anthropic's documentation says
+            // they cannot be used with citations, and web search always cites
+            // its sources. So the prompt asks for JSON and readTerms() takes
+            // it out of the text.
         }
         // This model has safety filters that now and then decline a harmless
         // request, for example a drama about hackers. With this set, the API
@@ -313,8 +294,11 @@ class KeywordExpander(
     }
 
     private fun readTerms(content: JsonArray): ExpansionResult {
+        val answer = jsonObjectIn(finalText(content))
+            ?: return Failure(FailureKind.BAD_REPLY, "The reply did not contain one JSON object that could be read.")
+
         val reply = try {
-            json.decodeFromString<TermsReply>(finalText(content))
+            json.decodeFromJsonElement<TermsReply>(answer)
         } catch (e: IllegalArgumentException) {
             return Failure(FailureKind.BAD_REPLY, "The reply was not the three lists that were asked for.")
         }
@@ -331,9 +315,11 @@ class KeywordExpander(
      *
      * A reply is a list of blocks. Blocks for thinking, for each search and
      * for each set of search results come first, and the answer is the text
-     * at the end. The API may split that text over several blocks, so they are
-     * joined. Text before a search is the model saying what it is about to
-     * do. It is thrown away when the next block that is not text turns up.
+     * at the end. Where the model cites a search result, the API puts the
+     * cited words in a text block of their own, so one answer can arrive as
+     * several text blocks, and they are joined. Text before a search is the
+     * model saying what it is about to do. It is thrown away when the next
+     * block that is not text turns up.
      */
     private fun finalText(content: JsonArray): String {
         val answer = StringBuilder()
@@ -346,6 +332,27 @@ class KeywordExpander(
             }
         }
         return answer.toString()
+    }
+
+    /**
+     * The one JSON object in [text], or null if there is none that can be read.
+     *
+     * The prompt asks for the object alone, but nothing enforces that, and a
+     * model may still put it in a code fence (```json ... ```) or add a
+     * sentence before or after it. So the object is taken to run from the
+     * first "{" to the last "}". If there are two objects, or a "{" in a
+     * sentence before the object or a "}" in one after it, that stretch is
+     * not valid JSON and the answer is not used.
+     */
+    private fun jsonObjectIn(text: String): JsonObject? {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start < 0 || end < start) return null
+        return try {
+            json.parseToJsonElement(text.substring(start, end + 1)) as? JsonObject
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 }
 
@@ -388,7 +395,11 @@ private class ApiErrorBody(val error: ApiError? = null)
 @Serializable
 private class ApiError(val message: String? = null)
 
-/** The model's final answer, as laid down by [TERMS_SCHEMA]. */
+/**
+ * The model's final answer, in the shape that "# Answer" in ExpansionPrompt.kt
+ * asks for. Each list has to be there and hold only strings, or the answer is
+ * not used. Any other key is ignored.
+ */
 @Serializable
 private class TermsReply(
     val strong: List<String>,
