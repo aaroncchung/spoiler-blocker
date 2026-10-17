@@ -134,7 +134,7 @@ class KeywordExpanderTest {
             body.keys,
         )
         assertEquals(JsonPrimitive("claude-opus-5-5"), body["model"])
-        assertEquals(JsonPrimitive(16000), body["max_tokens"])
+        assertEquals(JsonPrimitive(32000), body["max_tokens"])
         assertEquals(JsonPrimitive(SYSTEM_PROMPT), body["system"])
         assertEquals(parse("""{"type": "adaptive"}"""), body["thinking"])
         assertEquals(
@@ -329,6 +329,25 @@ class KeywordExpanderTest {
     }
 
     @Test
+    fun `a turn that pauses twice sends back both paused parts`() {
+        reply(message(PAUSED_CONTENT, stopReason = "pause_turn"))
+        // The reply to a continued turn holds only what is new.
+        reply(message(SECOND_PAUSED_CONTENT, stopReason = "pause_turn"))
+        reply(message(text(SUZUKA_TERMS)))
+
+        val result = expand()
+
+        assertTrue(result is Success)
+        val bodies = List(3) { sentBody() }
+        val lastMessages = bodies.last()["messages"]!!.jsonArray
+        assertEquals(2, lastMessages.size)
+        assertEquals(
+            parse("""{"role": "assistant", "content": [$PAUSED_CONTENT, $SECOND_PAUSED_CONTENT]}"""),
+            lastMessages[1],
+        )
+    }
+
+    @Test
     fun `gives up when the turn keeps pausing`() {
         repeat(MAX_CONTINUATIONS + 1) { reply(message(PAUSED_CONTENT, stopReason = "pause_turn")) }
 
@@ -336,12 +355,14 @@ class KeywordExpanderTest {
 
         assertFailure(FailureKind.BAD_REPLY, result)
         assertEquals(MAX_CONTINUATIONS + 1, server.requestCount)
-        // The last request was still a proper continuation of the same turn.
+        // The last request was still a proper continuation of the same turn,
+        // with every part written so far.
         val bodies = List(server.requestCount) { sentBody() }
         val lastMessages = bodies.last()["messages"]!!.jsonArray
         assertEquals(2, lastMessages.size)
         assertEquals(bodies.first()["messages"]!!.jsonArray[0], lastMessages[0])
-        assertEquals(parse("""{"role": "assistant", "content": [$PAUSED_CONTENT]}"""), lastMessages[1])
+        val everyPart = List(MAX_CONTINUATIONS) { PAUSED_CONTENT }.joinToString(",")
+        assertEquals(parse("""{"role": "assistant", "content": [$everyPart]}"""), lastMessages[1])
         assertEquals(bodies.first() - "messages", bodies.last() - "messages")
     }
 
@@ -384,7 +405,9 @@ class KeywordExpanderTest {
 
         val result = expand(expander = expander)
 
-        assertFailure(FailureKind.NO_NETWORK, result)
+        val failure = assertFailure(FailureKind.NO_NETWORK, result)
+        // Nothing was sent, so there is no warning about a bill.
+        assertFalse(failure.message.contains("billed"))
     }
 
     @Test
@@ -437,8 +460,10 @@ class KeywordExpanderTest {
 
         val result = expand(expander = expander)
 
-        assertFailure(FailureKind.NO_NETWORK, result)
+        val failure = assertFailure(FailureKind.NO_NETWORK, result)
         assertEquals(1, server.requestCount)
+        // The request got through before the connection died, so it may be billed.
+        assertTrue(failure.message.contains("billed"))
     }
 
     /**
@@ -714,6 +739,21 @@ private class SocketsThatNeverConnect : SocketFactory() {
     override fun createSocket(host: InetAddress, port: Int, localHost: InetAddress, localPort: Int): Socket =
         throw UnsupportedOperationException()
 }
+
+/** The part of a turn written before its second pause: the result of the search above, and another search. */
+private const val SECOND_PAUSED_CONTENT = """
+    {
+      "type": "web_search_tool_result",
+      "tool_use_id": "srvtoolu_01A2B3C4D5E6F7G8H9",
+      "content": []
+    },
+    {
+      "type": "server_tool_use",
+      "id": "srvtoolu_02B3C4D5E6F7G8H9I0",
+      "name": "web_search",
+      "input": {"query": "Suzuka 2026 qualifying"}
+    }
+"""
 
 /** A paused turn ends with a search that has not been run yet. */
 private const val PAUSED_CONTENT = """
