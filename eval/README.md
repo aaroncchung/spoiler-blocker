@@ -62,19 +62,30 @@ spread over several lines:
 
 ```json
 {"label":"related","texts":["Rain at Suzuka","Highlights from Sunday"],"sources":["FORMULA 1"]}
-{"label":"unrelated","texts":["Dinner at 7?"],"sources":["WhatsApp","Family"],"note":"A message"}
+{"kind":"notification","label":"unrelated","texts":["Dinner at 7?"],"sources":["WhatsApp","Family"],"note":"A message"}
 ```
 
 | Key | Required | Meaning |
 |---|---|---|
 | `label` | Yes | `"related"` if the example is about the blocker's topic, otherwise `"unrelated"`. |
-| `texts` | Yes | The separate pieces of text, for example a title and a caption. At least one must not be empty. |
-| `sources` | No | Where it came from: the channel or account. For a notification, the app name and the title. |
+| `texts` | Yes | The separate pieces of text, for example a title and a caption, or the text of a notification. At least one must not be empty. |
+| `sources` | No | Where it came from. For a post, the channel or account. For a notification, the app name, the title and the names of the people who sent its messages. |
+| `kind` | No | `"post"`, which is the default, or `"notification"`. It decides where terms are looked for, see below. |
 | `note` | No | Anything you want to remember. It is printed with the example and the matcher never sees it. |
 
 Blank lines are skipped. Any other line that cannot be read stops the script
 with an error that names the line, and so does a key that is not in the table.
 
-The matcher looks for strong and weak terms in `texts` only, and for the
-blocker's sources in `sources` only. A notification title that should be
-checked both ways goes in both lists.
+The matcher looks for the blocker's sources in `sources` only. Where it looks
+for strong and weak terms depends on `kind`, and is the same as in the app:
+
+- In a post, in `texts` only. A channel or account name is only looked for as
+  a source.
+- In a notification, in `texts` and in `sources`. The app looks for terms in
+  a notification's app name, title and senders as well. So a WhatsApp message
+  from Max saying "podium!!" holds the weak terms "Max" and "podium". There is
+  no need to copy the title into `texts`.
+
+Mark every notification with `"kind":"notification"`. Without it, a
+notification is counted as a post: the script reports misses that the app
+would not make and leaves out over-blocks that the app would make.

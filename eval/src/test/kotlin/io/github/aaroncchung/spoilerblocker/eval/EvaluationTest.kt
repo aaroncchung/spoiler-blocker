@@ -2,6 +2,7 @@ package io.github.aaroncchung.spoilerblocker.eval
 
 import io.github.aaroncchung.spoilerblocker.matcher.BlockerTerms
 import io.github.aaroncchung.spoilerblocker.matcher.Breadth
+import io.github.aaroncchung.spoilerblocker.matcher.Candidate
 import io.github.aaroncchung.spoilerblocker.matcher.Reason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -68,6 +69,54 @@ class EvaluationTest {
             narrow.overBlocks,
         )
         assertEquals(listOf(OverBlock(oneWeak, Reason.WeakTermBroad("Max"))), broad.overBlocks)
+    }
+
+    @Test
+    fun `a post's sources are only looked for as sources`() {
+        val post = Example(Label.RELATED, texts = listOf("Rain at Suzuka"), sources = listOf("FORMULA 1"))
+
+        assertEquals(Candidate(texts = listOf("Rain at Suzuka"), sources = listOf("FORMULA 1")), post.toCandidate())
+    }
+
+    @Test
+    fun `a notification's sources are texts as well, without repeats`() {
+        val notification = Example(
+            Label.RELATED,
+            texts = listOf("podium!!", "Max"),
+            sources = listOf("WhatsApp", "Max"),
+            kind = Kind.NOTIFICATION,
+        )
+
+        assertEquals(
+            Candidate(texts = listOf("WhatsApp", "Max", "podium!!"), sources = listOf("WhatsApp", "Max")),
+            notification.toCandidate(),
+        )
+    }
+
+    @Test
+    fun `a notification is counted the way the app decides it`() {
+        // A WhatsApp message from Max saying "podium!!". The app finds the
+        // weak term "Max" in the sender's name and blocks it.
+        val related = Example(
+            Label.RELATED,
+            texts = listOf("podium!!"),
+            sources = listOf("WhatsApp", "Max"),
+            kind = Kind.NOTIFICATION,
+        )
+        val unrelated = related.copy(label = Label.UNRELATED)
+
+        assertEquals(emptyList<Example>(), evaluate(terms, listOf(related)).misses)
+        assertEquals(
+            listOf(OverBlock(unrelated, Reason.WeakTerms(listOf("Max", "podium")))),
+            evaluate(terms, listOf(unrelated)).overBlocks,
+        )
+    }
+
+    @Test
+    fun `the same text as a post is allowed, because a channel name is not looked for as text`() {
+        val post = Example(Label.RELATED, texts = listOf("podium!!"), sources = listOf("Max"))
+
+        assertEquals(listOf(post), evaluate(terms, listOf(post)).misses)
     }
 
     @Test

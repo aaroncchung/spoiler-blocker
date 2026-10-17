@@ -90,6 +90,19 @@ class InputFilesTest {
     }
 
     @Test
+    fun `an example is a post unless its line says it is a notification`() {
+        val examples = parseExamples(
+            """
+            {"label":"related","texts":["Rain at Suzuka"]}
+            {"kind":"post","label":"related","texts":["Rain at Suzuka"]}
+            {"kind":"notification","label":"related","texts":["podium!!"],"sources":["WhatsApp","Max"]}
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf(Kind.POST, Kind.POST, Kind.NOTIFICATION), examples.map { it.kind })
+    }
+
+    @Test
     fun `blank lines are skipped but still counted`() {
         val examples = parseExamples(
             "\n" +
@@ -126,6 +139,7 @@ class InputFilesTest {
             """{"label":"related","text":["a misspelt key"]}""",
             """{"label":"related","texts":"not a list"}""",
             """{"texts":["no label"]}""",
+            """{"kind":"tweet","label":"related","texts":["a kind that does not exist"]}""",
             """{"label":"related","texts":[]}""", // nothing to check
             """{"label":"related","texts":["", "  "]}""", // nothing to check either
         )

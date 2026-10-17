@@ -19,6 +19,16 @@ enum class Label {
     UNRELATED,
 }
 
+/** What an example is. The app treats the two kinds differently, see [Example.toCandidate]. */
+@Serializable
+enum class Kind {
+    @SerialName("post")
+    POST,
+
+    @SerialName("notification")
+    NOTIFICATION,
+}
+
 /**
  * One labelled title, caption or notification. This is also the shape of one
  * line of the examples file, see [parseExamples].
@@ -28,11 +38,27 @@ data class Example(
     val label: Label,
     val texts: List<String>,
     val sources: List<String> = emptyList(),
+    val kind: Kind = Kind.POST,
     /** Anything the person labelling wanted to remember. The matcher never sees it. */
     val note: String? = null,
     /** Where the example is in its file, to find it again. @Transient: it is not read from the JSON. */
     @Transient val line: Int = 0,
-)
+) {
+    /**
+     * What the matcher is given for this example. It is built the way the app
+     * builds it, or the counts would not be the app's.
+     *
+     * A post's sources are its channel or account name, and they are only
+     * looked for as sources. A notification's sources are its app name, title
+     * and senders, and the app looks for terms in them too: its
+     * NotificationContent.toCandidate() puts them in the texts as well. So a
+     * WhatsApp message from Max saying "podium!!" holds two weak terms.
+     */
+    fun toCandidate(): Candidate = when (kind) {
+        Kind.POST -> Candidate(texts = texts, sources = sources)
+        Kind.NOTIFICATION -> Candidate(texts = (sources + texts).distinct(), sources = sources)
+    }
+}
 
 /** An unrelated example that was blocked, with the rule that blocked it. */
 data class OverBlock(val example: Example, val reason: Reason)
@@ -62,7 +88,7 @@ fun evaluate(terms: BlockerTerms, examples: List<Example>): Report {
     val overBlocks = mutableListOf<OverBlock>()
 
     for (example in examples) {
-        val verdict = matcher.check(Candidate(texts = example.texts, sources = example.sources))
+        val verdict = matcher.check(example.toCandidate())
         when (example.label) {
             Label.RELATED -> if (verdict is Verdict.Allowed) misses += example
             Label.UNRELATED -> if (verdict is Verdict.Blocked) overBlocks += OverBlock(example, verdict.reason)

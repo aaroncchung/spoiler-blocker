@@ -70,8 +70,8 @@ fun parseBlocker(text: String): BlockerTerms {
 
 /**
  * Reads the content of an examples file. Each line is one JSON object:
- * `{"label":"related","texts":[...],"sources":[...],"note":"..."}`, where
- * "sources" and "note" may be left out. Blank lines are skipped.
+ * `{"kind":"post","label":"related","texts":[...],"sources":[...],"note":"..."}`,
+ * where "kind", "sources" and "note" may be left out. Blank lines are skipped.
  *
  * A line that cannot be read stops everything, and the error says which line
  * it was. Skipping it quietly would make the counts wrong.
