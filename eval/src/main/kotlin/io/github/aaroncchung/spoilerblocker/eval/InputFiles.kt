@@ -12,8 +12,10 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import java.io.IOException
 import java.nio.charset.CharacterCodingException
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 /** An input file is not in the expected format. The message is written for the person running the script. */
@@ -28,12 +30,22 @@ class BadInputException(message: String) : Exception(message)
  * without any error: "Pérez" would no longer be "Pérez".
  */
 internal fun readTextFile(path: String): String {
-    val file = Path.of(path)
+    val file = try {
+        Path.of(path)
+    } catch (e: InvalidPathException) {
+        // A character that cannot be in a path, such as "*" or "?" on Windows.
+        throw BadInputException("this is not a valid file path")
+    }
     if (!Files.isRegularFile(file)) throw BadInputException("file not found")
     val text = try {
         Files.readString(file)
     } catch (e: CharacterCodingException) {
         throw BadInputException("this is not UTF-8 text. Save the file with the encoding UTF-8 and try again.")
+    } catch (e: IOException) {
+        // CharacterCodingException is an IOException too, so this has to come
+        // second. What is left is mostly a file that this user may not read,
+        // or that another program holds open. The class name says which.
+        throw BadInputException("the file could not be read (${e.javaClass.simpleName})")
     }
     // Some Windows editors start a file with an invisible byte-order mark,
     // which is not valid JSON.

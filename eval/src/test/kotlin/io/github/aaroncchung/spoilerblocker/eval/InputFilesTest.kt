@@ -282,4 +282,14 @@ class InputFilesTest {
 
         assertEquals("file not found", error.message)
     }
+
+    @Test
+    fun `a path that cannot be a path is refused`() {
+        // No system allows the character with the number 0 in a path.
+        val impossible = "nothing${Char(0)}here.jsonl"
+
+        val error = assertThrows(BadInputException::class.java) { readTextFile(impossible) }
+
+        assertEquals("this is not a valid file path", error.message)
+    }
 }
