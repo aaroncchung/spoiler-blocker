@@ -60,8 +60,13 @@
             Android finds it. Android starts it once the owner has given the
             app notification access, and restarts it after a reboot.
 
-            exported has to be true, because the caller is the system and not
-            this app.
+            exported has to be stated, because the service has an intent
+            filter, but its value makes no difference here. Android connects
+            to the listener as the system, which may connect to any service,
+            exported or not. What keeps other apps out is the permission line:
+            only an app that holds BIND_NOTIFICATION_LISTENER_SERVICE may
+            connect, and only the system holds it. The example in Android's
+            documentation for NotificationListenerService says false.
 
             A listener may also declare notification types it does not want,
             with "disabled_filter_types" meta-data. The only type this app has
