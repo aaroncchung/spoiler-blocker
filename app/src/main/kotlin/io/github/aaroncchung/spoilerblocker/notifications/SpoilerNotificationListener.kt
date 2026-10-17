@@ -176,8 +176,9 @@ class SpoilerNotificationListener : NotificationListenerService() {
             block()
         } catch (e: RuntimeException) {
             // The kind of exception and never its message: a message can
-            // quote the notification that caused it.
-            Log.w(TAG, "$what: could not be handled (${e.javaClass.simpleName})")
+            // quote the notification that caused it. Only in debug builds,
+            // like every line this listener logs about a package.
+            if (BuildConfig.DEBUG) Log.w(TAG, "$what: could not be handled (${e.javaClass.simpleName})")
             null
         }
 
