@@ -7,6 +7,38 @@
     <string name="blockers_no_terms">No terms</string>
     <!-- What a tap on a row does. A screen reader says it after "Double tap to". -->
     <string name="blockers_row_action">edit</string>
+    <!-- The button that opens the hidden list, without and with the number of entries. -->
+    <string name="blockers_hidden">Hidden</string>
+    <string name="blockers_hidden_count">Hidden (%1$d)</string>
+
+    <!-- The card on the blocker list when a blocker is on without notification access -->
+    <string name="access_card_title">Notifications are not being hidden</string>
+    <string name="access_card_text">A blocker is on, but Spoiler Blocker is not allowed to see notifications. Allow notification access for it in the system settings.</string>
+    <string name="access_card_button">Open settings</string>
+
+    <!-- Hidden list -->
+    <string name="hidden_title">Hidden while blocking</string>
+    <string name="hidden_back">Back</string>
+    <string name="hidden_empty">Nothing has been hidden.</string>
+    <!-- The app and the time of one entry, for example "Messages · 5 Oct, 14:32". -->
+    <string name="hidden_app_and_time">%1$s · %2$s</string>
+    <string name="hidden_concealed">Tap to show</string>
+    <string name="hidden_by">Hidden by %1$s</string>
+    <!-- The blocker's name, then the term that was found. -->
+    <string name="hidden_reason_term">Hidden by %1$s. It contains “%2$s”.</string>
+    <string name="hidden_reason_group">Hidden by %1$s. It was in a group whose summary contains “%2$s”.</string>
+    <!-- For example "Open Messages". -->
+    <string name="hidden_open_app">Open %1$s</string>
+    <!-- What a tap on a row does. A screen reader says it after "Double tap to". -->
+    <string name="hidden_row_reveal">show</string>
+    <string name="hidden_row_conceal">hide</string>
+    <string name="hidden_reveal_all">Show all</string>
+    <string name="hidden_conceal_all">Hide all</string>
+    <string name="hidden_clear_all">Clear all</string>
+    <string name="hidden_clear_title">Clear the hidden list?</string>
+    <string name="hidden_clear_text">Every entry is removed from this list. This cannot be undone.</string>
+    <string name="hidden_clear_confirm">Clear</string>
+    <string name="hidden_clear_cancel">Cancel</string>
 
     <!-- Blocker editor -->
     <string name="editor_title_new">New blocker</string>

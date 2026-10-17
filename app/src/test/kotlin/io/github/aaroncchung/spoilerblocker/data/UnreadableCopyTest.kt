@@ -41,4 +41,22 @@ class UnreadableCopyTest {
         assertEquals("second", File(temporaryFolder.root, "blockers.json.unreadable.2").readText())
         assertEquals("fourth", File(temporaryFolder.root, "blockers.json.unreadable.4").readText())
     }
+
+    @Test
+    fun `every copy of a file is found, and nothing else`() {
+        val file = fileInFolder("hidden_notifications.json", "")
+        val copies = listOf(
+            fileInFolder("hidden_notifications.json.unreadable", "first"),
+            fileInFolder("hidden_notifications.json.unreadable.2", "second"),
+            // A gap, as if the third had been deleted by hand.
+            fileInFolder("hidden_notifications.json.unreadable.4", "fourth"),
+        )
+        // The copy of another file, and names that only look alike.
+        fileInFolder("blockers.json.unreadable", "")
+        fileInFolder("hidden_notifications.json.tmp", "")
+        fileInFolder("hidden_notifications.json.unreadable.old", "")
+
+        // The order in which a folder lists its files is not fixed.
+        assertEquals(copies.toSet(), unreadableCopiesOf(file).toSet())
+    }
 }

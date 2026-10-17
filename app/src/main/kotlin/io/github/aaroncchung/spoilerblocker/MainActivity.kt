@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import io.github.aaroncchung.spoilerblocker.ui.blockers.BlockerEditorScreen
 import io.github.aaroncchung.spoilerblocker.ui.blockers.BlockerListScreen
+import io.github.aaroncchung.spoilerblocker.ui.hidden.HiddenListScreen
 import io.github.aaroncchung.spoilerblocker.ui.theme.SpoilerBlockerTheme
 import kotlinx.serialization.Serializable
 
@@ -49,6 +50,10 @@ private object BlockerListRoute
 @Serializable
 private data class BlockerEditorRoute(val blockerId: String? = null)
 
+/** The "hidden while blocking" list. */
+@Serializable
+private object HiddenListRoute
+
 /** Decides which screen is showing, and keeps the stack that Back walks down. */
 @Composable
 private fun SpoilerBlockerNavHost() {
@@ -64,6 +69,9 @@ private fun SpoilerBlockerNavHost() {
                         launchSingleTop = true
                     }
                 },
+                onOpenHiddenList = {
+                    navController.navigate(HiddenListRoute) { launchSingleTop = true }
+                },
             )
         }
         composable<BlockerEditorRoute> { backStackEntry ->
@@ -75,6 +83,12 @@ private fun SpoilerBlockerNavHost() {
                 // "back" would close the list too and leave a blank screen.
                 // Going back to the list twice is harmless.
                 onClose = { navController.popBackStack<BlockerListRoute>(inclusive = false) },
+            )
+        }
+        composable<HiddenListRoute> {
+            HiddenListScreen(
+                // Back to the blocker list, for the same reason as in the editor.
+                onBack = { navController.popBackStack<BlockerListRoute>(inclusive = false) },
             )
         }
     }

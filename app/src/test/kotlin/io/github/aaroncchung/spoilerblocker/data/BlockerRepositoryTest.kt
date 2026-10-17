@@ -339,6 +339,32 @@ class BlockerRepositoryTest {
         assertEquals(listOf(race), repository.blockers.first())
     }
 
+    // When a file cannot be read and the empty list that should replace it
+    // cannot be written either, the failure reaches whoever asked, and from
+    // there the log. It must not carry what the file holds.
+    @Test
+    fun `the failure for an unreadable file does not quote the file`() = runTest {
+        file.writeText("""{"version":1,"blockers":[{"id":"race","name":"Suzuka weekend""")
+        // DataStore writes a new file under this name and then renames it.
+        // A folder in its place, and not an empty one, makes that fail.
+        val temporaryName = File(temporaryFolder.root, "blockers.json.tmp")
+        temporaryName.mkdir()
+        File(temporaryName, "in the way").writeText("")
+        val repository = BlockerRepository({ file }, this)
+
+        val failure = try {
+            repository.blockers.first()
+            null
+        } catch (e: IOException) {
+            e
+        }
+
+        assertTrue("Reading should have failed.", failure != null)
+        // stackTraceToString is what a crash puts in the log: the message,
+        // the causes and the suppressed exceptions.
+        assertFalse(failure!!.stackTraceToString().contains("Suzuka"))
+    }
+
     @Test
     fun `a second file that cannot be read is kept beside the first copy`() = runTest {
         // Each repository here stands for one run of the app, as in the

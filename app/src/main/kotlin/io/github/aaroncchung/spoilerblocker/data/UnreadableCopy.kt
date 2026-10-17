@@ -25,3 +25,17 @@ fun keepUnreadableCopy(file: File): File {
     }
     return file.copyTo(copy, overwrite = false)
 }
+
+/**
+ * Every copy that [keepUnreadableCopy] has made of [file] and that is still
+ * there: blockers.json.unreadable and the numbered ones. The numbers may have
+ * gaps, if a copy was deleted by hand, so the whole folder is looked through.
+ */
+fun unreadableCopiesOf(file: File): List<File> {
+    val firstName = file.name + ".unreadable"
+    return file.parentFile?.listFiles().orEmpty().filter { candidate ->
+        val name = candidate.name
+        name == firstName ||
+            (name.startsWith("$firstName.") && name.removePrefix("$firstName.").toIntOrNull() != null)
+    }
+}
