@@ -37,10 +37,10 @@ A JDK (17 or newer) and the Android SDK are needed. Point at the SDK with
 |---|---|
 | `app/` | The Android app. Package `io.github.aaroncchung.spoilerblocker`. |
 | `app/…/SpoilerBlockerApplication.kt` | The Application and `AppContainer`, which owns the objects shared by the whole app. |
-| `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. |
+| `app/…/data/` | `Blocker` and `BlockerRepository`: blockers are stored as JSON in `files/blockers.json`. `HiddenNotification` and `HiddenNotificationRepository`: the hidden list is `files/hidden_notifications.json`, newest first, 500 at most. A file that cannot be read is copied aside by `keepUnreadableCopy` before it is replaced, to `<name>.unreadable`, then `.unreadable.2` and so on. A copy is never overwritten. Clearing the hidden list deletes every copy of its file, found by `unreadableCopiesOf`. |
 | `app/…/blocking/` | `ActiveBlockers`, which decides which enabled blocker blocks something. Plain Kotlin, shared by the notification listener and, later, the screen reader. |
 | `app/…/notifications/` | The notification listener, `NotificationContent` (a notification's text as plain Kotlin), `HidingDecision.kt` (what to dismiss and what to list, as plain Kotlin) and the notification access helpers. |
-| `app/…/status/` | `StatusNotifier`, which shows the status notification while a blocker is on, `StatusNotificationContent` (what it says, as plain Kotlin) and the helpers for the permission to post notifications. |
+| `app/…/status/` | `StatusNotifier`, which shows the status notification while a blocker is on, with the receivers that put it back after it is swiped away or switched back on; `StatusNotificationContent` (what it says and whether notifications are being hidden, as plain Kotlin); and the helpers for the permission to post notifications and for the status channel. |
 | `app/…/ui/blockers/` | The blocker list and editor screens with their ViewModels. |
 | `app/…/ui/hidden/` | The "Hidden while blocking" screen and its ViewModel. |
 | `matcher/` | The matching rules. Plain Kotlin, no Android, no dependencies. Package `io.github.aaroncchung.spoilerblocker.matcher`. `TermTableTest` is a table of terms and texts: add a row there when a match surprises you. |

@@ -44,6 +44,7 @@ data class NotificationContent(
      * Everything else in a notification that can end up on screen. It is
      * matched and never shown in the hidden list:
      * - the labels of the notification's buttons;
+     * - the hint in a reply field, and the replies an app suggests under it;
      * - the title and text an app gives for a locked screen that hides the
      *   real ones;
      * - earlier messages of a chat, which an app may attach for context;
