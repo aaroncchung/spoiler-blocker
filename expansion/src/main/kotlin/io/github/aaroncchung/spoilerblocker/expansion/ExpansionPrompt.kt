@@ -31,28 +31,34 @@ internal val SYSTEM_PROMPT: String = """
     Terms are looked for in a YouTube video's title, an Instagram post's
     caption, and a notification's title and text. The text is cut into words
     wherever there is anything other than a letter or a digit, at a capital
-    after a small letter, and where letters meet digits, so "#JapaneseGP2026"
-    is the words japanese, gp, 2026. A term is found when its letters and
-    digits, run together, are exactly one word of the text or several words in
-    a row. Capitals and accents are ignored. What follows from that:
+    after a small letter, at the last of several capitals when a small letter
+    follows it, and where letters meet digits, so "#JapaneseGP2026" is the
+    words japanese, gp, 2026 and "#GPHighlights" is gp, highlights. A term is
+    found when its letters and digits, run together, are exactly one word of
+    the text or several words in a row. Capitals and accents are ignored. What
+    follows from that:
 
     - Spaces, punctuation, capitals and accents inside a term change nothing.
       "Japanese GP", "#JapaneseGP" and "japanese-gp" are one term, found in
       "Japanese G.P.", "#JapaneseGP" and "#japanesegp" alike. List it once.
     - A term has to fill whole words. "Max" is found in "Max's lap" and in
       "#MaxVerstappen", but not in "maximum".
-    - Small letters run together are a single word. "#maxverstappen" and the
-      handle "maxverstappen1" are found by "Max Verstappen", not by
-      "Verstappen". "#suzukacircuit" is found by "Suzuka Circuit", not by
-      "Suzuka". So list the short distinctive name, and also each longer form
+    - Letters of one case run together are a single word. "#maxverstappen",
+      "#MAXVERSTAPPEN" and the handle "maxverstappen1" are found by "Max
+      Verstappen", not by "Verstappen". "#suzukacircuit" is found by "Suzuka
+      Circuit", not by "Suzuka". In capitals, a letter before a number is
+      part of the run: "#SUZUKAF1" is found by "Suzuka F1", not by "Suzuka"
+      or "F1". So list the short distinctive name, and also each longer form
       that people write as one tag or handle.
     - Word endings are not understood: "win", "wins", "winner" and "won" are
       four terms, "podium" and "podiums" two. List every form you want caught.
     - A number is one word, however many digits it has. "P1" is not found in
       "P10", and "F1" is not found in "#F12026", though "F1 2026" is. Where
       tags with the year attached are common, list that form as well.
-    - "ø" and "ß" are not read as "o" and "ss". Give both spellings of a name
-      that has one.
+    - Letters such as "ø", "ß" and "ł" are read as "o", "ss" and "l", but no
+      other spelling is understood: "Müller" is not found by "Mueller", nor
+      "Đoković" by "Djokovic". Give such other spellings as terms of their
+      own.
     - A very short term is also found where it is an ordinary word or a piece
       of a capitalised name: "US" in "join us", "You" in "YouTube". Leave such
       a term out, or keep it weak.
