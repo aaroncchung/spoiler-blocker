@@ -128,8 +128,8 @@ class SpoilerNotificationListener : NotificationListenerService() {
     /** Android calls this once the service may ask for and dismiss notifications. */
     override fun onListenerConnected() {
         isConnected = true
-        // Notification access may have just been given, and the status
-        // notification says whether the app has it.
+        // The status notification says whether notifications are being
+        // hidden, which they are from now on.
         container.statusNotifier.refresh()
         sweep()
     }

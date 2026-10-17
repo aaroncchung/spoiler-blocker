@@ -7,14 +7,17 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.annotation.MainThread
 import io.github.aaroncchung.spoilerblocker.MainActivity
 import io.github.aaroncchung.spoilerblocker.R
 import io.github.aaroncchung.spoilerblocker.SpoilerBlockerApplication
 import io.github.aaroncchung.spoilerblocker.data.Blocker
+import io.github.aaroncchung.spoilerblocker.notifications.SpoilerNotificationListener
 import io.github.aaroncchung.spoilerblocker.notifications.isNotificationAccessGranted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -44,6 +47,13 @@ class StatusNotifier(private val context: Context) {
     private var enabledBlockerNames: List<String>? = null
 
     /**
+     * When the process started, near enough: the Application creates this
+     * object first thing. elapsedRealtime is a clock that the owner cannot
+     * set and that goes on counting while the phone sleeps.
+     */
+    private val startedAtMillis = SystemClock.elapsedRealtime()
+
+    /**
      * Starts following [blockers]: from now on the notification is posted,
      * updated or removed whenever a blocker is switched, renamed or deleted.
      * The Application calls this once, when the process starts.
@@ -53,8 +63,8 @@ class StatusNotifier(private val context: Context) {
         createChannel()
 
         // Dispatchers.Main.immediate, as in the notification listener, so
-        // that everything in this class runs on the main thread and the
-        // field above needs no lock.
+        // that everything in this class runs on the main thread and
+        // enabledBlockerNames needs no lock.
         scope.launch(Dispatchers.Main.immediate) {
             blockers
                 .map { all -> all.filter { it.enabled }.map { it.name } }
@@ -64,31 +74,49 @@ class StatusNotifier(private val context: Context) {
                     refresh()
                 }
         }
+
+        // A warning that the listener is not connected waits until this
+        // time is up (see isTooEarlyToWarn). The listener calls refresh()
+        // when it connects. This is for when it never does.
+        scope.launch(Dispatchers.Main.immediate) {
+            delay(LISTENER_CONNECT_WAIT_MILLIS)
+            refresh()
+        }
     }
 
     /**
      * Posts the notification again, or removes it, to match the blockers
-     * that are on and the notification access as they are at this moment.
+     * that are on and whether notifications are being hidden at this moment.
      *
-     * Call this when something changed that Android does not announce:
-     * notification access was given or taken away, the owner allowed the app
-     * to post notifications, or the notification was swiped away.
+     * Call this when something changed that this class does not follow by
+     * itself: notification access was given or taken away, the listener
+     * connected or disconnected, the owner allowed the app to post
+     * notifications, or the notification was swiped away.
      */
     @MainThread
     fun refresh() {
         // Not read from storage yet. The first read ends in a call to this.
         val names = enabledBlockerNames ?: return
 
-        val content = statusNotificationContent(names, isNotificationAccessGranted(context))
+        val hidingState = hidingState(
+            notificationAccessGranted = isNotificationAccessGranted(context),
+            listenerConnected = SpoilerNotificationListener.isConnected,
+        )
+        val content = statusNotificationContent(names, hidingState)
         if (content == null) {
             notificationManager.cancel(NOTIFICATION_ID)
-        } else {
-            // Posting under the id of a notification that is showing
-            // replaces it. If the owner has not allowed the app to post
-            // notifications, Android drops this without an error, and the
-            // blocker list shows a card about it.
-            notificationManager.notify(NOTIFICATION_ID, build(content))
+            return
         }
+        if (isTooEarlyToWarn(hidingState, SystemClock.elapsedRealtime() - startedAtMillis)) {
+            // Whatever is showing, or not showing, stays as it is until the
+            // listener connects or the wait is over (see start).
+            return
+        }
+        // Posting under the id of a notification that is showing replaces
+        // it. If the owner has not allowed the app to post notifications,
+        // Android drops this without an error, and the blocker list shows a
+        // card about it.
+        notificationManager.notify(NOTIFICATION_ID, build(content))
     }
 
     /** A notification has to be put in a channel. The owner can silence or block each channel in the system settings. */
@@ -126,16 +154,23 @@ class StatusNotifier(private val context: Context) {
 
         val title: String
         val text: String
-        if (content.isHidingNotifications) {
-            title = resources.getQuantityString(
-                R.plurals.status_title,
-                content.blockerCount,
-                content.blockerCount,
-            )
-            text = names
-        } else {
-            title = context.getString(R.string.status_no_access_title)
-            text = context.getString(R.string.status_no_access_text, names)
+        when (content.hidingState) {
+            HidingState.HIDING -> {
+                title = resources.getQuantityString(
+                    R.plurals.status_title,
+                    content.blockerCount,
+                    content.blockerCount,
+                )
+                text = names
+            }
+            HidingState.NO_ACCESS -> {
+                title = context.getString(R.string.status_not_hidden_title)
+                text = context.getString(R.string.status_no_access_text, names)
+            }
+            HidingState.NOT_CONNECTED -> {
+                title = context.getString(R.string.status_not_hidden_title)
+                text = context.getString(R.string.status_not_connected_text, names)
+            }
         }
 
         return Notification.Builder(context, CHANNEL_ID)

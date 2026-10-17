@@ -8,21 +8,22 @@ class StatusNotificationContentTest {
 
     @Test
     fun `with no blocker on there is no notification`() {
-        assertNull(statusNotificationContent(emptyList(), notificationAccessGranted = true))
         // Nothing is on, so there is nothing to warn about either.
-        assertNull(statusNotificationContent(emptyList(), notificationAccessGranted = false))
+        for (hidingState in HidingState.entries) {
+            assertNull(statusNotificationContent(emptyList(), hidingState))
+        }
     }
 
     @Test
     fun `one blocker is shown by its name`() {
         val content = statusNotificationContent(
             listOf("2026 Japanese Grand Prix"),
-            notificationAccessGranted = true,
+            HidingState.HIDING,
         )
 
         assertEquals(
             StatusNotificationContent(
-                isHidingNotifications = true,
+                hidingState = HidingState.HIDING,
                 blockerCount = 1,
                 names = listOf("2026 Japanese Grand Prix"),
             ),
@@ -35,7 +36,7 @@ class StatusNotificationContentTest {
     fun `up to three blockers are counted and all named, in the order given`() {
         val content = statusNotificationContent(
             listOf("2026 Japanese Grand Prix", "Season finale", "Cup final"),
-            notificationAccessGranted = true,
+            HidingState.HIDING,
         )!!
 
         assertEquals(3, content.blockerCount)
@@ -47,7 +48,7 @@ class StatusNotificationContentTest {
     fun `of many blockers the first three are named and the rest counted`() {
         val names = List(12) { index -> "Blocker ${index + 1}" }
 
-        val content = statusNotificationContent(names, notificationAccessGranted = true)!!
+        val content = statusNotificationContent(names, HidingState.HIDING)!!
 
         assertEquals(12, content.blockerCount)
         assertEquals(listOf("Blocker 1", "Blocker 2", "Blocker 3"), content.names)
@@ -58,7 +59,7 @@ class StatusNotificationContentTest {
     fun `a name of forty characters is shown whole`() {
         val name = "a".repeat(40)
 
-        val content = statusNotificationContent(listOf(name), notificationAccessGranted = true)!!
+        val content = statusNotificationContent(listOf(name), HidingState.HIDING)!!
 
         assertEquals(listOf(name), content.names)
     }
@@ -67,7 +68,7 @@ class StatusNotificationContentTest {
     fun `a longer name is cut to forty characters, the last of them an ellipsis`() {
         val name = "a".repeat(41)
 
-        val content = statusNotificationContent(listOf(name), notificationAccessGranted = true)!!
+        val content = statusNotificationContent(listOf(name), HidingState.HIDING)!!
 
         assertEquals(listOf("a".repeat(39) + "…"), content.names)
     }
@@ -79,7 +80,7 @@ class StatusNotificationContentTest {
         // The 39th character is a space.
         val space = "c".repeat(38) + " " + "ccc"
 
-        val content = statusNotificationContent(listOf(emoji, space), notificationAccessGranted = true)!!
+        val content = statusNotificationContent(listOf(emoji, space), HidingState.HIDING)!!
 
         assertEquals(listOf("b".repeat(38) + "…", "c".repeat(38) + "…"), content.names)
     }
@@ -90,7 +91,7 @@ class StatusNotificationContentTest {
 
         val content = statusNotificationContent(
             listOf(long, "Cup final", long, long),
-            notificationAccessGranted = true,
+            HidingState.HIDING,
         )!!
 
         val cut = "The one where everything that could hap…"
@@ -100,15 +101,48 @@ class StatusNotificationContentTest {
     }
 
     @Test
-    fun `without notification access it says that nothing is being hidden`() {
+    fun `when nothing is being hidden it says so and still names the blockers`() {
         val names = listOf("2026 Japanese Grand Prix", "Season finale")
+        val hiding = statusNotificationContent(names, HidingState.HIDING)!!
 
-        val withAccess = statusNotificationContent(names, notificationAccessGranted = true)!!
-        val without = statusNotificationContent(names, notificationAccessGranted = false)!!
+        for (hidingState in listOf(HidingState.NO_ACCESS, HidingState.NOT_CONNECTED)) {
+            val notHiding = statusNotificationContent(names, hidingState)!!
 
-        assertEquals(true, withAccess.isHidingNotifications)
-        assertEquals(false, without.isHidingNotifications)
-        // The blockers are still named, so that it is clear what is not working.
-        assertEquals(withAccess.copy(isHidingNotifications = false), without)
+            assertEquals(hidingState, notHiding.hidingState)
+            // The blockers are still named, so that it is clear what is not working.
+            assertEquals(hiding.copy(hidingState = hidingState), notHiding)
+        }
+    }
+
+    @Test
+    fun `notifications are only hidden while the listener is connected`() {
+        assertEquals(HidingState.HIDING, hidingState(notificationAccessGranted = true, listenerConnected = true))
+        // The listener has not connected yet, or Android has disconnected it.
+        assertEquals(
+            HidingState.NOT_CONNECTED,
+            hidingState(notificationAccessGranted = true, listenerConnected = false),
+        )
+    }
+
+    @Test
+    fun `without notification access the reason given is the missing access`() {
+        assertEquals(HidingState.NO_ACCESS, hidingState(notificationAccessGranted = false, listenerConnected = false))
+        // Access was taken away a moment ago, and the listener has not been told yet.
+        assertEquals(HidingState.NO_ACCESS, hidingState(notificationAccessGranted = false, listenerConnected = true))
+    }
+
+    @Test
+    fun `a missing listener is not warned about in the first seconds after the process starts`() {
+        assertEquals(true, isTooEarlyToWarn(HidingState.NOT_CONNECTED, millisSinceStart = 0))
+        assertEquals(true, isTooEarlyToWarn(HidingState.NOT_CONNECTED, LISTENER_CONNECT_WAIT_MILLIS - 1))
+        assertEquals(false, isTooEarlyToWarn(HidingState.NOT_CONNECTED, LISTENER_CONNECT_WAIT_MILLIS))
+        assertEquals(false, isTooEarlyToWarn(HidingState.NOT_CONNECTED, millisSinceStart = 3_600_000))
+    }
+
+    @Test
+    fun `missing access is warned about at once, and nothing else waits either`() {
+        // Without access the listener will not connect, however long the wait.
+        assertEquals(false, isTooEarlyToWarn(HidingState.NO_ACCESS, millisSinceStart = 0))
+        assertEquals(false, isTooEarlyToWarn(HidingState.HIDING, millisSinceStart = 0))
     }
 }

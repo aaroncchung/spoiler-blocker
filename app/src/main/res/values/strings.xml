@@ -36,9 +36,11 @@
         <item quantity="one">%1$s and %2$d more</item>
         <item quantity="other">%1$s and %2$d more</item>
     </plurals>
-    <string name="status_no_access_title">Notifications are not being hidden</string>
+    <string name="status_not_hidden_title">Notifications are not being hidden</string>
     <!-- Only the first line shows until the notification is expanded. %1$s is the names of the blockers that are on. -->
     <string name="status_no_access_text">Notification access is off. Tap to fix this.\nOn: %1$s</string>
+    <!-- When the app has notification access but Android has not connected its listener. The usual cure is to switch access off and on. -->
+    <string name="status_not_connected_text">Notification access is on, but Android has not connected the app. Switch access off and on again.\nOn: %1$s</string>
 
     <!-- Hidden list -->
     <string name="hidden_title">Hidden while blocking</string>
