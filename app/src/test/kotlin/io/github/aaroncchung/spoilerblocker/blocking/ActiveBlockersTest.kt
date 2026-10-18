@@ -2,6 +2,7 @@ package io.github.aaroncchung.spoilerblocker.blocking
 
 import io.github.aaroncchung.spoilerblocker.data.Blocker
 import io.github.aaroncchung.spoilerblocker.matcher.BlockerTerms
+import io.github.aaroncchung.spoilerblocker.matcher.Breadth
 import io.github.aaroncchung.spoilerblocker.matcher.Candidate
 import io.github.aaroncchung.spoilerblocker.matcher.Reason
 import org.junit.Assert.assertEquals
@@ -123,10 +124,61 @@ class ActiveBlockersTest {
     }
 
     @Test
-    fun `the terms of a blocker are handed to the matcher as they are`() {
+    fun `the lists and the breadth of a blocker are handed to the matcher as they are`() {
+        val blocker = race.copy(
+            weakTerms = listOf("Max", "podium"),
+            sources = listOf("FORMULA 1"),
+            breadth = Breadth.BROAD,
+        )
+
         assertEquals(
-            BlockerTerms(strong = listOf("Japanese Grand Prix", "Suzuka")),
+            BlockerTerms(
+                strong = listOf("Japanese Grand Prix", "Suzuka"),
+                weak = listOf("Max", "podium"),
+                sources = listOf("FORMULA 1"),
+                breadth = Breadth.BROAD,
+            ),
+            blocker.toBlockerTerms(),
+        )
+    }
+
+    @Test
+    fun `a blocker stored without the newer fields is strong terms only and narrow`() {
+        // race is built the way a version 1 file is read: the fields that
+        // version 2 added are left at their defaults.
+        assertEquals(
+            BlockerTerms(
+                strong = listOf("Japanese Grand Prix", "Suzuka"),
+                weak = emptyList(),
+                sources = emptyList(),
+                breadth = Breadth.NARROW,
+            ),
             race.toBlockerTerms(),
+        )
+    }
+
+    // The rules themselves are tested in the matcher. This checks that a
+    // stored blocker's weak terms, sources and breadth reach it.
+    @Test
+    fun `weak terms, sources and breadth of a stored blocker all take effect`() {
+        val narrow = race.copy(weakTerms = listOf("Max", "podium"), sources = listOf("FORMULA 1"))
+        val broad = narrow.copy(breadth = Breadth.BROAD)
+        val oneWeakTerm = candidate("Max on his plans for next year")
+        val twoWeakTerms = candidate("Max on the podium again")
+        val fromTheSource = Candidate(texts = listOf("What a finish!"), sources = listOf("FORMULA 1"))
+
+        assertNull(ActiveBlockers(listOf(narrow)).check(oneWeakTerm))
+        assertEquals(
+            BlockedBy(broad, Reason.WeakTermBroad("Max")),
+            ActiveBlockers(listOf(broad)).check(oneWeakTerm),
+        )
+        assertEquals(
+            BlockedBy(narrow, Reason.WeakTerms(listOf("Max", "podium"))),
+            ActiveBlockers(listOf(narrow)).check(twoWeakTerms),
+        )
+        assertEquals(
+            BlockedBy(narrow, Reason.Source("FORMULA 1")),
+            ActiveBlockers(listOf(narrow)).check(fromTheSource),
         )
     }
 }

@@ -2,6 +2,7 @@ package io.github.aaroncchung.spoilerblocker.ui.blockers
 
 import io.github.aaroncchung.spoilerblocker.data.Blocker
 import io.github.aaroncchung.spoilerblocker.data.BlockerRepository
+import io.github.aaroncchung.spoilerblocker.matcher.Breadth
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,6 +41,10 @@ class BlockerEditorViewModelTest {
         strongTerms = listOf("Japanese Grand Prix", "Suzuka"),
         enabled = false,
         createdAtMillis = 1_000,
+        description = "The 2026 race at Suzuka",
+        weakTerms = listOf("Max", "podium"),
+        sources = listOf("FORMULA 1"),
+        breadth = Breadth.BROAD,
     )
 
     @Before
@@ -55,45 +60,71 @@ class BlockerEditorViewModelTest {
     private fun TestScope.newRepository() =
         BlockerRepository({ File(temporaryFolder.root, "blockers.json") }, this)
 
-    /** A ViewModel for a new blocker with [terms] already added. */
-    private fun TestScope.newBlockerViewModel(vararg terms: String): BlockerEditorViewModel {
+    /** Types [term] into the field of [list] and presses Add. */
+    private fun BlockerEditorViewModel.add(list: TermList, term: String) {
+        onTermDraftChange(list, term)
+        addTerm(list)
+    }
+
+    /** A ViewModel for a new blocker with [strongTerms] already added, in this order. */
+    private fun TestScope.newBlockerViewModel(vararg strongTerms: String): BlockerEditorViewModel {
         val viewModel = BlockerEditorViewModel(newRepository(), blockerId = null)
-        for (term in terms) {
-            viewModel.onTermDraftChange(term)
-            viewModel.addTerm()
+        for (term in strongTerms) {
+            viewModel.add(TermList.STRONG, term)
         }
         return viewModel
     }
 
     @Test
-    fun `a new blocker starts switched on, with no name and no terms`() = runTest {
+    fun `a new blocker starts switched on and narrow, with no name and empty lists`() = runTest {
         val state = newBlockerViewModel().uiState.value
 
         assertTrue(state.isNew)
         assertFalse(state.isLoading)
         assertTrue(state.enabled)
+        assertEquals(Breadth.NARROW, state.breadth)
         assertEquals("", state.name)
-        assertEquals(emptyList<String>(), state.terms)
+        for (list in TermList.entries) {
+            assertEquals(TermListState(), state.list(list))
+        }
+        assertTrue(state.hidesNothing)
     }
 
     @Test
     fun `adding a term trims it and empties the field`() = runTest {
         val viewModel = newBlockerViewModel()
 
-        viewModel.onTermDraftChange("  Japanese Grand Prix ")
-        viewModel.addTerm()
+        viewModel.onTermDraftChange(TermList.STRONG, "  Japanese Grand Prix ")
+        viewModel.addTerm(TermList.STRONG)
 
-        assertEquals(listOf("Japanese Grand Prix"), viewModel.uiState.value.terms)
-        assertEquals("", viewModel.uiState.value.termDraft)
+        assertEquals(TermListState(terms = listOf("Japanese Grand Prix")), viewModel.uiState.value.strong)
     }
 
     @Test
-    fun `terms are kept in the order they were added`() = runTest {
+    fun `each list has its own field and its own terms`() = runTest {
+        val viewModel = newBlockerViewModel()
+
+        viewModel.onTermDraftChange(TermList.STRONG, "Suzuka")
+        viewModel.onTermDraftChange(TermList.WEAK, "podium")
+        viewModel.onTermDraftChange(TermList.SOURCES, "FORMULA 1")
+        // Only the weak terms' Add is pressed. The other two fields keep
+        // their text.
+        viewModel.addTerm(TermList.WEAK)
+
+        val state = viewModel.uiState.value
+        assertEquals(TermListState(draft = "Suzuka"), state.strong)
+        assertEquals(TermListState(terms = listOf("podium")), state.weak)
+        assertEquals(TermListState(draft = "FORMULA 1"), state.sources)
+        assertFalse(state.hidesNothing)
+    }
+
+    @Test
+    fun `the newest term comes first`() = runTest {
         val viewModel = newBlockerViewModel("Suzuka", "Japanese Grand Prix", "#JapaneseGP")
 
         assertEquals(
-            listOf("Suzuka", "Japanese Grand Prix", "#JapaneseGP"),
-            viewModel.uiState.value.terms,
+            listOf("#JapaneseGP", "Japanese Grand Prix", "Suzuka"),
+            viewModel.uiState.value.strong.terms,
         )
     }
 
@@ -101,34 +132,109 @@ class BlockerEditorViewModelTest {
     fun `a blank term is not added`() = runTest {
         val viewModel = newBlockerViewModel("Suzuka")
 
-        viewModel.onTermDraftChange("   ")
-        viewModel.addTerm()
-        viewModel.addTerm()
+        viewModel.onTermDraftChange(TermList.STRONG, "   ")
+        viewModel.addTerm(TermList.STRONG)
+        viewModel.addTerm(TermList.STRONG)
 
-        assertEquals(listOf("Suzuka"), viewModel.uiState.value.terms)
-        assertEquals("", viewModel.uiState.value.termDraft)
+        assertEquals(TermListState(terms = listOf("Suzuka")), viewModel.uiState.value.strong)
     }
 
     @Test
     fun `a term already in the list is not added again, whatever its capitals`() = runTest {
         val viewModel = newBlockerViewModel("Suzuka")
 
-        viewModel.onTermDraftChange("Suzuka")
-        viewModel.addTerm()
-        viewModel.onTermDraftChange(" SUZUKA ")
-        viewModel.addTerm()
+        viewModel.add(TermList.STRONG, "Suzuka")
+        viewModel.add(TermList.STRONG, " SUZUKA ")
 
-        assertEquals(listOf("Suzuka"), viewModel.uiState.value.terms)
-        assertEquals("", viewModel.uiState.value.termDraft)
+        assertEquals(TermListState(terms = listOf("Suzuka")), viewModel.uiState.value.strong)
+    }
+
+    @Test
+    fun `text with no letter or digit is refused and stays in the field`() = runTest {
+        val viewModel = newBlockerViewModel("Suzuka")
+
+        for (list in TermList.entries) {
+            viewModel.add(list, " !!! ")
+
+            val listState = viewModel.uiState.value.list(list)
+            assertTrue("$list", listState.isDraftRefused)
+            assertEquals(" !!! ", listState.draft)
+            assertFalse("$list", "!!!" in listState.terms)
+        }
+        assertEquals(listOf("Suzuka"), viewModel.uiState.value.strong.terms)
+    }
+
+    @Test
+    fun `changing the field takes the refusal away`() = runTest {
+        val viewModel = newBlockerViewModel()
+        viewModel.add(TermList.WEAK, "?")
+        assertTrue(viewModel.uiState.value.weak.isDraftRefused)
+
+        viewModel.onTermDraftChange(TermList.WEAK, "?1")
+        assertFalse(viewModel.uiState.value.weak.isDraftRefused)
+
+        // One digit is enough for it to be found.
+        viewModel.addTerm(TermList.WEAK)
+        assertEquals(TermListState(terms = listOf("?1")), viewModel.uiState.value.weak)
     }
 
     @Test
     fun `removing a term leaves the others`() = runTest {
         val viewModel = newBlockerViewModel("Suzuka", "Japanese Grand Prix", "#JapaneseGP")
+        viewModel.add(TermList.WEAK, "Suzuka")
 
-        viewModel.removeTerm("Japanese Grand Prix")
+        viewModel.removeTerm(TermList.STRONG, "Japanese Grand Prix")
+        viewModel.removeTerm(TermList.STRONG, "Suzuka")
 
-        assertEquals(listOf("Suzuka", "#JapaneseGP"), viewModel.uiState.value.terms)
+        assertEquals(listOf("#JapaneseGP"), viewModel.uiState.value.strong.terms)
+        // The same word in another list is another chip.
+        assertEquals(listOf("Suzuka"), viewModel.uiState.value.weak.terms)
+    }
+
+    @Test
+    fun `a term moves from strong to weak and back`() = runTest {
+        val viewModel = newBlockerViewModel("Suzuka", "Max")
+        viewModel.add(TermList.WEAK, "podium")
+
+        viewModel.moveTerm(TermList.STRONG, "Max")
+        assertEquals(listOf("Suzuka"), viewModel.uiState.value.strong.terms)
+        assertEquals(listOf("Max", "podium"), viewModel.uiState.value.weak.terms)
+
+        viewModel.moveTerm(TermList.WEAK, "podium")
+        assertEquals(listOf("podium", "Suzuka"), viewModel.uiState.value.strong.terms)
+        assertEquals(listOf("Max"), viewModel.uiState.value.weak.terms)
+    }
+
+    @Test
+    fun `a term moved to a list that has it already is not there twice`() = runTest {
+        val viewModel = newBlockerViewModel("Suzuka", "Max")
+        viewModel.add(TermList.WEAK, "max")
+
+        viewModel.moveTerm(TermList.STRONG, "Max")
+
+        assertEquals(listOf("Suzuka"), viewModel.uiState.value.strong.terms)
+        assertEquals(listOf("max"), viewModel.uiState.value.weak.terms)
+    }
+
+    @Test
+    fun `a source cannot be moved, and neither can a term that is not in the list`() = runTest {
+        val viewModel = newBlockerViewModel("Suzuka")
+        viewModel.add(TermList.SOURCES, "FORMULA 1")
+        val before = viewModel.uiState.value
+
+        viewModel.moveTerm(TermList.SOURCES, "FORMULA 1")
+        viewModel.moveTerm(TermList.WEAK, "Suzuka")
+
+        assertEquals(before, viewModel.uiState.value)
+    }
+
+    @Test
+    fun `the breadth can be changed`() = runTest {
+        val viewModel = newBlockerViewModel()
+
+        viewModel.onBreadthChange(Breadth.BROAD)
+
+        assertEquals(Breadth.BROAD, viewModel.uiState.value.breadth)
     }
 
     @Test
@@ -162,22 +268,27 @@ class BlockerEditorViewModelTest {
         val viewModel = BlockerEditorViewModel(repository, blockerId = null)
 
         viewModel.onNameChange("Race")
-        viewModel.onTermDraftChange("Suzuka")
-        viewModel.addTerm()
+        viewModel.add(TermList.STRONG, "Suzuka")
+        viewModel.add(TermList.WEAK, "podium")
+        viewModel.add(TermList.SOURCES, "FORMULA 1")
+        viewModel.onBreadthChange(Breadth.BROAD)
         advanceUntilIdle()
 
         assertEquals(emptyList<Blocker>(), repository.blockers.first())
     }
 
     @Test
-    fun `saving a new blocker stores it and finishes`() = runTest {
+    fun `saving a new blocker stores its lists and breadth and finishes`() = runTest {
         val repository = newRepository()
         val viewModel = BlockerEditorViewModel(repository, blockerId = null)
         val before = System.currentTimeMillis()
 
         viewModel.onNameChange("  2026 Japanese Grand Prix ")
-        viewModel.onTermDraftChange("Suzuka")
-        viewModel.addTerm()
+        viewModel.add(TermList.STRONG, "Suzuka")
+        viewModel.add(TermList.WEAK, "Max")
+        viewModel.add(TermList.WEAK, "podium")
+        viewModel.add(TermList.SOURCES, "FORMULA 1")
+        viewModel.onBreadthChange(Breadth.BROAD)
         viewModel.save()
         advanceUntilIdle()
 
@@ -185,6 +296,9 @@ class BlockerEditorViewModelTest {
         val saved = repository.blockers.first().single()
         assertEquals("2026 Japanese Grand Prix", saved.name)
         assertEquals(listOf("Suzuka"), saved.strongTerms)
+        assertEquals(listOf("podium", "Max"), saved.weakTerms)
+        assertEquals(listOf("FORMULA 1"), saved.sources)
+        assertEquals(Breadth.BROAD, saved.breadth)
         assertTrue(saved.enabled)
         assertTrue(saved.id.isNotBlank())
         assertTrue(saved.createdAtMillis in before..System.currentTimeMillis())
@@ -231,7 +345,7 @@ class BlockerEditorViewModelTest {
     }
 
     @Test
-    fun `a blocker with no terms can be saved`() = runTest {
+    fun `a blocker with nothing in its lists can be saved`() = runTest {
         val repository = newRepository()
         val viewModel = BlockerEditorViewModel(repository, blockerId = null)
         viewModel.onNameChange("Race")
@@ -239,22 +353,47 @@ class BlockerEditorViewModelTest {
         viewModel.save()
         advanceUntilIdle()
 
-        assertEquals(emptyList<String>(), repository.blockers.first().single().strongTerms)
+        val saved = repository.blockers.first().single()
+        assertEquals(emptyList<String>(), saved.strongTerms)
+        assertEquals(emptyList<String>(), saved.weakTerms)
+        assertEquals(emptyList<String>(), saved.sources)
+        assertEquals(Breadth.NARROW, saved.breadth)
     }
 
     @Test
-    fun `save adds a term that was typed but not added`() = runTest {
+    fun `save adds what was typed into each field but not added`() = runTest {
         val repository = newRepository()
         val viewModel = BlockerEditorViewModel(repository, blockerId = null)
         viewModel.onNameChange("Race")
-        viewModel.onTermDraftChange("Suzuka")
-        viewModel.addTerm()
+        viewModel.add(TermList.STRONG, "Suzuka")
 
-        viewModel.onTermDraftChange(" Honda ")
+        viewModel.onTermDraftChange(TermList.STRONG, " Honda ")
+        viewModel.onTermDraftChange(TermList.WEAK, "podium")
+        viewModel.onTermDraftChange(TermList.SOURCES, "FORMULA 1")
         viewModel.save()
         advanceUntilIdle()
 
-        assertEquals(listOf("Suzuka", "Honda"), repository.blockers.first().single().strongTerms)
+        val saved = repository.blockers.first().single()
+        assertEquals(listOf("Honda", "Suzuka"), saved.strongTerms)
+        assertEquals(listOf("podium"), saved.weakTerms)
+        assertEquals(listOf("FORMULA 1"), saved.sources)
+    }
+
+    @Test
+    fun `save leaves out text in a field that could never be found`() = runTest {
+        val repository = newRepository()
+        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        viewModel.onNameChange("Race")
+        viewModel.add(TermList.STRONG, "Suzuka")
+
+        viewModel.onTermDraftChange(TermList.STRONG, "!!!")
+        viewModel.onTermDraftChange(TermList.SOURCES, "...")
+        viewModel.save()
+        advanceUntilIdle()
+
+        val saved = repository.blockers.first().single()
+        assertEquals(listOf("Suzuka"), saved.strongTerms)
+        assertEquals(emptyList<String>(), saved.sources)
     }
 
     @Test
@@ -271,28 +410,52 @@ class BlockerEditorViewModelTest {
         assertFalse(state.isNew)
         assertFalse(state.isLoading)
         assertEquals(race.name, state.name)
-        assertEquals(race.strongTerms, state.terms)
+        assertEquals(TermListState(race.strongTerms), state.strong)
+        assertEquals(TermListState(race.weakTerms), state.weak)
+        assertEquals(TermListState(race.sources), state.sources)
+        assertEquals(race.breadth, state.breadth)
         assertEquals(race.enabled, state.enabled)
         assertTrue(state.canSave)
     }
 
     @Test
-    fun `saving an existing blocker replaces it and keeps its id and creation time`() = runTest {
+    fun `saving an existing blocker unchanged stores it exactly as it was`() = runTest {
+        val repository = newRepository()
+        repository.save(race)
+        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        advanceUntilIdle()
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(listOf(race), repository.blockers.first())
+    }
+
+    @Test
+    fun `saving an existing blocker replaces it and keeps its id, creation time and description`() = runTest {
         val repository = newRepository()
         repository.save(race)
         val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
         advanceUntilIdle()
 
         viewModel.onNameChange("Japanese GP")
-        viewModel.removeTerm("Suzuka")
+        viewModel.removeTerm(TermList.STRONG, "Suzuka")
+        viewModel.moveTerm(TermList.WEAK, "Max")
+        viewModel.removeTerm(TermList.SOURCES, "FORMULA 1")
+        viewModel.onBreadthChange(Breadth.NARROW)
         viewModel.onEnabledChange(true)
         viewModel.save()
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isFinished)
+        // copy() changes only what is named, so the id, the creation time and
+        // the description are those of the stored blocker.
         val expected = race.copy(
             name = "Japanese GP",
-            strongTerms = listOf("Japanese Grand Prix"),
+            strongTerms = listOf("Max", "Japanese Grand Prix"),
+            weakTerms = listOf("podium"),
+            sources = emptyList(),
+            breadth = Breadth.NARROW,
             enabled = true,
         )
         assertEquals(listOf(expected), repository.blockers.first())
@@ -353,7 +516,7 @@ class BlockerEditorViewModelTest {
         val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
         advanceUntilIdle()
         viewModel.onNameChange("Typed name")
-        viewModel.removeTerm("Suzuka")
+        viewModel.removeTerm(TermList.STRONG, "Suzuka")
         viewModel.onEnabledChange(true)
 
         // Something else changes the stored blocker while the editor is open.
@@ -362,7 +525,7 @@ class BlockerEditorViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals("Typed name", state.name)
-        assertEquals(listOf("Japanese Grand Prix"), state.terms)
+        assertEquals(listOf("Japanese Grand Prix"), state.strong.terms)
         assertTrue(state.enabled)
     }
 

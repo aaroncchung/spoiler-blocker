@@ -113,8 +113,11 @@ class BlockerRepository(
  * to [Blocker]. An older build does not know the new field. It could load the
  * file all the same, and would then write it back without the field. The
  * version is how the older build knows to refuse the file instead.
+ *
+ * Version 2 added the description, the weak terms, the sources and the
+ * breadth of a blocker.
  */
-private const val CURRENT_VERSION = 1
+private const val CURRENT_VERSION = 2
 
 /** The contents of the file. */
 @Serializable

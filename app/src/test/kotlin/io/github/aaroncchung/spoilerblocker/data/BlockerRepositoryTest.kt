@@ -2,6 +2,7 @@ package io.github.aaroncchung.spoilerblocker.data
 
 import java.io.File
 import java.io.IOException
+import io.github.aaroncchung.spoilerblocker.matcher.Breadth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -52,6 +53,10 @@ class BlockerRepositoryTest {
         strongTerms = listOf("finale"),
         enabled = false,
         createdAtMillis = 2_000,
+        description = "The last episode of the season",
+        weakTerms = listOf("twist", "ending"),
+        sources = listOf("Example Studios"),
+        breadth = Breadth.BROAD,
     )
 
     /**
@@ -99,6 +104,68 @@ class BlockerRepositoryTest {
             strongTerms = emptyList(),
             enabled = false,
             createdAtMillis = 1_791_241_067_370,
+        ),
+    )
+
+    /**
+     * A whole file in version 2 of the stored format, which added the
+     * description, the weak terms, the sources and the breadth.
+     *
+     * NEVER EDIT THIS, for the same reason as [version1File].
+     */
+    private val version2File = """
+        {
+          "version": 2,
+          "blockers": [
+            {
+              "id": "0b8f6c1e-5a52-4a0e-9d57-3c1f0e6b7a11",
+              "name": "2026 Japanese Grand Prix",
+              "strongTerms": ["Japanese Grand Prix", "Suzuka", "#JapaneseGP"],
+              "enabled": true,
+              "createdAtMillis": 1791239695165,
+              "description": "2026 Japanese Grand Prix",
+              "weakTerms": ["Max", "podium", "P1"],
+              "sources": ["FORMULA 1", "Sky Sports F1"],
+              "breadth": "NARROW"
+            },
+            {
+              "id": "c4a1d2f3-8e77-4b6a-a0c9-5d2e9f4b6c22",
+              "name": "São Paulo Grand Prix",
+              "strongTerms": [],
+              "enabled": false,
+              "createdAtMillis": 1791241067370,
+              "description": "",
+              "weakTerms": [],
+              "sources": [],
+              "breadth": "BROAD"
+            }
+          ]
+        }
+    """.trimIndent()
+
+    /** The blockers in [version2File]. This is frozen with it. */
+    private val version2Blockers = listOf(
+        Blocker(
+            id = "0b8f6c1e-5a52-4a0e-9d57-3c1f0e6b7a11",
+            name = "2026 Japanese Grand Prix",
+            strongTerms = listOf("Japanese Grand Prix", "Suzuka", "#JapaneseGP"),
+            enabled = true,
+            createdAtMillis = 1_791_239_695_165,
+            description = "2026 Japanese Grand Prix",
+            weakTerms = listOf("Max", "podium", "P1"),
+            sources = listOf("FORMULA 1", "Sky Sports F1"),
+            breadth = Breadth.NARROW,
+        ),
+        Blocker(
+            id = "c4a1d2f3-8e77-4b6a-a0c9-5d2e9f4b6c22",
+            name = "São Paulo Grand Prix",
+            strongTerms = emptyList(),
+            enabled = false,
+            createdAtMillis = 1_791_241_067_370,
+            description = "",
+            weakTerms = emptyList(),
+            sources = emptyList(),
+            breadth = Breadth.BROAD,
         ),
     )
 
@@ -208,40 +275,59 @@ class BlockerRepositoryTest {
     }
 
     @Test
-    fun `a version 1 file loads`() = runTest {
+    fun `a version 1 file still loads`() = runTest {
         file.writeText(version1File)
 
         val repository = BlockerRepository({ file }, this)
 
-        assertEquals(version1Blockers, repository.blockers.first())
+        val blockers = repository.blockers.first()
+        assertEquals(version1Blockers, blockers)
+        assertFalse(unreadableCopy.exists())
+        // What version 1 did not have is filled in with the defaults, so a
+        // version 1 blocker behaves as it always did: strong terms only.
+        for (blocker in blockers) {
+            assertEquals("", blocker.description)
+            assertEquals(emptyList<String>(), blocker.weakTerms)
+            assertEquals(emptyList<String>(), blocker.sources)
+            assertEquals(Breadth.NARROW, blocker.breadth)
+        }
+    }
+
+    @Test
+    fun `a version 2 file loads`() = runTest {
+        file.writeText(version2File)
+
+        val repository = BlockerRepository({ file }, this)
+
+        assertEquals(version2Blockers, repository.blockers.first())
         assertFalse(unreadableCopy.exists())
     }
 
     // This fails as soon as the build writes anything else, for example
     // after a field is added to Blocker. That is the moment to raise
     // CURRENT_VERSION, add a document for the new version beside
-    // version1File, and point this test at the new one.
+    // version2File, and point this test at the new one.
     @Test
-    fun `this build writes version 1 files`() = runTest {
+    fun `this build writes version 2 files`() = runTest {
         val repository = BlockerRepository({ file }, this)
 
-        for (blocker in version1Blockers) {
+        for (blocker in version2Blockers) {
             repository.save(blocker)
         }
 
         // Compared as JSON, so that line breaks and spaces do not count.
-        assertEquals(Json.parseToJsonElement(version1File), Json.parseToJsonElement(file.readText()))
+        assertEquals(Json.parseToJsonElement(version2File), Json.parseToJsonElement(file.readText()))
     }
 
     @Test
-    fun `a change stamps an older file with the version of this build`() = runTest {
-        // There was no version before 1, so 0 stands in for "older".
-        file.writeText("""{"version":0,"blockers":[]}""")
+    fun `a change rewrites a version 1 file as version 2 and keeps its blockers`() = runTest {
+        file.writeText(version1File)
         val repository = BlockerRepository({ file }, this)
 
         repository.save(race)
 
-        assertTrue(file.readText().startsWith("""{"version":1,"""))
+        assertTrue(file.readText().startsWith("""{"version":2,"""))
+        assertEquals(version1Blockers + race, repository.blockers.first())
     }
 
     // What is guaranteed is only this: an unknown field does not make the
@@ -252,14 +338,14 @@ class BlockerRepositoryTest {
         file.writeText(
             """
             {
-              "version": 1,
+              "version": 2,
               "somethingNew": true,
               "blockers": [
                 {
                   "id": "race",
                   "name": "2026 Japanese Grand Prix",
                   "strongTerms": ["Japanese Grand Prix", "Suzuka"],
-                  "weakTerms": ["podium"],
+                  "expiresAtMillis": 2000,
                   "enabled": true,
                   "createdAtMillis": 1000
                 }
@@ -279,13 +365,13 @@ class BlockerRepositoryTest {
         assertRefusedAndLeftUntouched(
             """
             {
-              "version": 2,
+              "version": 3,
               "blockers": [
                 {
                   "id": "race",
                   "name": "2026 Japanese Grand Prix",
                   "strongTerms": ["Japanese Grand Prix", "Suzuka"],
-                  "weakTerms": ["podium"],
+                  "expiresAtMillis": 2000,
                   "enabled": true,
                   "createdAtMillis": 1000
                 }
@@ -299,7 +385,7 @@ class BlockerRepositoryTest {
     fun `a newer file is refused even when this build cannot read the rest of it`() = runTest {
         // Here the newer build has renamed "name", which this build requires.
         assertRefusedAndLeftUntouched(
-            """{"version":2,"blockers":[{"id":"race","title":"2026 Japanese Grand Prix"}]}""",
+            """{"version":3,"blockers":[{"id":"race","title":"2026 Japanese Grand Prix"}]}""",
         )
     }
 
@@ -311,7 +397,7 @@ class BlockerRepositoryTest {
             repository.blockers.first()
             fail("Reading a newer file should fail.")
         } catch (e: IllegalStateException) {
-            assertTrue(e.message.orEmpty().contains("newer build (version 2)"))
+            assertTrue(e.message.orEmpty().contains("newer build (version 3)"))
         }
         try {
             repository.setEnabled("race", false)
