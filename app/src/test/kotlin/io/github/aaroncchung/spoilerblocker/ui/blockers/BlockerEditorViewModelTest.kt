@@ -1,8 +1,10 @@
 package io.github.aaroncchung.spoilerblocker.ui.blockers
 
+import androidx.lifecycle.SavedStateHandle
 import io.github.aaroncchung.spoilerblocker.data.Blocker
 import io.github.aaroncchung.spoilerblocker.data.BlockerRepository
 import io.github.aaroncchung.spoilerblocker.matcher.Breadth
+import io.github.aaroncchung.spoilerblocker.suggestions.TermSuggester
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,6 +26,8 @@ import org.junit.rules.TemporaryFolder
 
 /**
  * Tests the editor's ViewModel against a real repository on a temporary file.
+ * These tests are about the form with the lists. The first step of a new
+ * blocker, the suggestions and the saved state are in `NewBlockerFlowTest`.
  *
  * A ViewModel launches its work on the main thread, which a unit test on a PC
  * does not have, so a test dispatcher stands in for it. That dispatcher runs
@@ -66,9 +70,28 @@ class BlockerEditorViewModelTest {
         addTerm(list)
     }
 
+    // No test in this class asks for suggestions, so the suggester fails if
+    // it is called. Each ViewModel gets an empty saved state, as on an
+    // ordinary start. NewBlockerFlowTest covers both of those.
+    private val neverAsked = TermSuggester { _, _ -> error("These tests do not ask for suggestions.") }
+
+    /** A ViewModel for the stored blocker with this id. */
+    private fun storedBlocker(repository: BlockerRepository, blockerId: String) =
+        BlockerEditorViewModel(repository, neverAsked, SavedStateHandle(), blockerId)
+
+    /**
+     * A ViewModel for a new blocker whose terms are typed by hand: it is
+     * past the first step and shows the form with its empty lists.
+     */
+    private fun newBlocker(repository: BlockerRepository): BlockerEditorViewModel {
+        val viewModel = BlockerEditorViewModel(repository, neverAsked, SavedStateHandle(), blockerId = null)
+        viewModel.typeTermsMyself()
+        return viewModel
+    }
+
     /** A ViewModel for a new blocker with [strongTerms] already added, in this order. */
     private fun TestScope.newBlockerViewModel(vararg strongTerms: String): BlockerEditorViewModel {
-        val viewModel = BlockerEditorViewModel(newRepository(), blockerId = null)
+        val viewModel = newBlocker(newRepository())
         for (term in strongTerms) {
             viewModel.add(TermList.STRONG, term)
         }
@@ -76,11 +99,12 @@ class BlockerEditorViewModelTest {
     }
 
     @Test
-    fun `a new blocker starts switched on and narrow, with no name and empty lists`() = runTest {
+    fun `the form of a new blocker starts switched on and narrow, with no name and empty lists`() = runTest {
         val state = newBlockerViewModel().uiState.value
 
         assertTrue(state.isNew)
         assertFalse(state.isLoading)
+        assertEquals(EditorStep.LISTS, state.step)
         assertTrue(state.enabled)
         assertEquals(Breadth.NARROW, state.breadth)
         assertEquals("", state.name)
@@ -252,7 +276,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `save with a blank name stores nothing`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         viewModel.onNameChange("   ")
 
         viewModel.save()
@@ -265,7 +289,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `nothing is stored until save`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
 
         viewModel.onNameChange("Race")
         viewModel.add(TermList.STRONG, "Suzuka")
@@ -280,7 +304,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `saving a new blocker stores its lists and breadth and finishes`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         val before = System.currentTimeMillis()
 
         viewModel.onNameChange("  2026 Japanese Grand Prix ")
@@ -309,7 +333,7 @@ class BlockerEditorViewModelTest {
         val repository = newRepository()
 
         for (name in listOf("First", "Second")) {
-            val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+            val viewModel = newBlocker(repository)
             viewModel.onNameChange(name)
             viewModel.save()
             advanceUntilIdle()
@@ -321,7 +345,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `pressing save twice stores one blocker`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         viewModel.onNameChange("Race")
 
         viewModel.save()
@@ -334,7 +358,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `a new blocker can be switched off before it is saved`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         viewModel.onNameChange("Race")
 
         viewModel.onEnabledChange(false)
@@ -347,7 +371,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `a blocker with nothing in its lists can be saved`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         viewModel.onNameChange("Race")
 
         viewModel.save()
@@ -363,7 +387,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `save adds what was typed into each field but not added`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         viewModel.onNameChange("Race")
         viewModel.add(TermList.STRONG, "Suzuka")
 
@@ -382,7 +406,7 @@ class BlockerEditorViewModelTest {
     @Test
     fun `save leaves out text in a field that could never be found`() = runTest {
         val repository = newRepository()
-        val viewModel = BlockerEditorViewModel(repository, blockerId = null)
+        val viewModel = newBlocker(repository)
         viewModel.onNameChange("Race")
         viewModel.add(TermList.STRONG, "Suzuka")
 
@@ -401,7 +425,7 @@ class BlockerEditorViewModelTest {
         val repository = newRepository()
         repository.save(race)
 
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         assertTrue(viewModel.uiState.value.isLoading)
         assertFalse(viewModel.uiState.value.canSave)
         advanceUntilIdle()
@@ -422,7 +446,7 @@ class BlockerEditorViewModelTest {
     fun `saving an existing blocker unchanged stores it exactly as it was`() = runTest {
         val repository = newRepository()
         repository.save(race)
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         advanceUntilIdle()
 
         viewModel.save()
@@ -435,7 +459,7 @@ class BlockerEditorViewModelTest {
     fun `saving an existing blocker replaces it and keeps its id, creation time and description`() = runTest {
         val repository = newRepository()
         repository.save(race)
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         advanceUntilIdle()
 
         viewModel.onNameChange("Japanese GP")
@@ -467,7 +491,7 @@ class BlockerEditorViewModelTest {
         val other = race.copy(id = "other", name = "Season finale")
         repository.save(race)
         repository.save(other)
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         advanceUntilIdle()
 
         viewModel.delete()
@@ -481,7 +505,7 @@ class BlockerEditorViewModelTest {
     fun `save pressed straight after delete does not bring the blocker back`() = runTest {
         val repository = newRepository()
         repository.save(race)
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         advanceUntilIdle()
 
         // No advanceUntilIdle() between the two: Save arrives while the
@@ -498,7 +522,7 @@ class BlockerEditorViewModelTest {
     fun `delete pressed straight after save is ignored`() = runTest {
         val repository = newRepository()
         repository.save(race)
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         advanceUntilIdle()
 
         viewModel.onNameChange("Japanese GP")
@@ -513,7 +537,7 @@ class BlockerEditorViewModelTest {
     fun `a later change in storage does not overwrite what is being typed`() = runTest {
         val repository = newRepository()
         repository.save(race)
-        val viewModel = BlockerEditorViewModel(repository, blockerId = race.id)
+        val viewModel = storedBlocker(repository, race.id)
         advanceUntilIdle()
         viewModel.onNameChange("Typed name")
         viewModel.removeTerm(TermList.STRONG, "Suzuka")
@@ -531,7 +555,7 @@ class BlockerEditorViewModelTest {
 
     @Test
     fun `opening a blocker that no longer exists finishes straight away`() = runTest {
-        val viewModel = BlockerEditorViewModel(newRepository(), blockerId = "deleted")
+        val viewModel = storedBlocker(newRepository(), "deleted")
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isFinished)

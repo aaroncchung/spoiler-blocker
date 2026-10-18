@@ -1,5 +1,6 @@
 package io.github.aaroncchung.spoilerblocker.ui.blockers
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +66,10 @@ private const val CHIPS_SHOWN_AT_FIRST = 12
 /**
  * Creates a blocker, or edits or deletes a stored one.
  *
+ * A new blocker has two steps on this one screen. First the owner describes
+ * it, and can have the lists suggested ([DescribeStep]). Then comes the form
+ * with the lists, which is all that a stored blocker shows.
+ *
  * @param blockerId the blocker to edit, or null to create a new one.
  * @param onClose called to leave the screen: on Back, and after a save or a
  *   delete.
@@ -85,6 +90,10 @@ fun BlockerEditorScreen(
 
     BlockerEditorContent(
         uiState = uiState,
+        onDescriptionChange = viewModel::onDescriptionChange,
+        onSuggestTerms = viewModel::suggestTerms,
+        onCancelSuggestion = viewModel::cancelSuggestion,
+        onTypeTermsMyself = viewModel::typeTermsMyself,
         onNameChange = viewModel::onNameChange,
         onEnabledChange = viewModel::onEnabledChange,
         onBreadthChange = viewModel::onBreadthChange,
@@ -102,6 +111,10 @@ fun BlockerEditorScreen(
 @Composable
 private fun BlockerEditorContent(
     uiState: BlockerEditorUiState,
+    onDescriptionChange: (String) -> Unit,
+    onSuggestTerms: () -> Unit,
+    onCancelSuggestion: () -> Unit,
+    onTypeTermsMyself: () -> Unit,
     onNameChange: (String) -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onBreadthChange: (Breadth) -> Unit,
@@ -116,6 +129,12 @@ private fun BlockerEditorContent(
     // rememberSaveable keeps the dialog open through a screen rotation. Plain
     // remember would forget it.
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var showDiscardDialog by rememberSaveable { mutableStateOf(false) }
+
+    // Takes over the phone's Back gesture while going back would throw away
+    // the lists of a blocker that was never saved, and asks first. While it
+    // is not enabled, Back leaves the screen as usual.
+    BackHandler(enabled = uiState.backNeedsConfirming) { showDiscardDialog = true }
 
     Scaffold(
         topBar = {
@@ -125,7 +144,10 @@ private fun BlockerEditorContent(
                     Text(stringResource(title))
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        // The arrow asks the same question as the gesture.
+                        onClick = { if (uiState.backNeedsConfirming) showDiscardDialog = true else onBack() },
+                    ) {
                         Icon(
                             painterResource(R.drawable.ic_arrow_back),
                             contentDescription = stringResource(R.string.editor_back),
@@ -141,9 +163,12 @@ private fun BlockerEditorContent(
                             )
                         }
                     }
-                    // Save is in the top bar so that the keyboard never covers it.
-                    TextButton(onClick = onSave, enabled = uiState.canSave) {
-                        Text(stringResource(R.string.editor_save))
+                    // There is nothing to save yet in the first step.
+                    if (uiState.step == EditorStep.LISTS) {
+                        // Save is in the top bar so that the keyboard never covers it.
+                        TextButton(onClick = onSave, enabled = uiState.canSave) {
+                            Text(stringResource(R.string.editor_save))
+                        }
                     }
                 },
             )
@@ -164,40 +189,80 @@ private fun BlockerEditorContent(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                OutlinedTextField(
-                    value = uiState.name,
-                    onValueChange = onNameChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.editor_name)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                )
-                EnabledRow(enabled = uiState.enabled, onEnabledChange = onEnabledChange)
-                if (uiState.hidesNothing) {
-                    Text(
-                        stringResource(R.string.editor_terms_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                when (uiState.step) {
+                    EditorStep.DESCRIBE -> DescribeStep(
+                        description = uiState.description,
+                        breadth = uiState.breadth,
+                        suggestion = uiState.suggestion,
+                        canSuggest = uiState.canSuggest,
+                        onDescriptionChange = onDescriptionChange,
+                        onBreadthChange = onBreadthChange,
+                        onSuggest = onSuggestTerms,
+                        onCancel = onCancelSuggestion,
+                        onTypeMyself = onTypeTermsMyself,
                     )
-                }
-                BreadthChoice(breadth = uiState.breadth, onBreadthChange = onBreadthChange)
-                for (list in TermList.entries) {
-                    // key ties what each editor remembers, such as "Show
-                    // all", to its list and not to its place in the loop.
-                    key(list) {
-                        TermListEditor(
-                            list = list,
-                            state = uiState.list(list),
-                            breadth = uiState.breadth,
-                            onDraftChange = { draft -> onTermDraftChange(list, draft) },
-                            onAdd = { onAddTerm(list) },
-                            onRemove = { term -> onRemoveTerm(list, term) },
-                            onMove = { term -> onMoveTerm(list, term) },
+
+                    EditorStep.LISTS -> {
+                        OutlinedTextField(
+                            value = uiState.name,
+                            onValueChange = onNameChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.editor_name)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         )
+                        EnabledRow(enabled = uiState.enabled, onEnabledChange = onEnabledChange)
+                        if (uiState.hidesNothing) {
+                            Text(
+                                stringResource(R.string.editor_terms_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        BreadthChoice(breadth = uiState.breadth, onBreadthChange = onBreadthChange)
+                        for (list in TermList.entries) {
+                            // key ties what each editor remembers, such as
+                            // "Show all", to its list and not to its place
+                            // in the loop.
+                            key(list) {
+                                TermListEditor(
+                                    list = list,
+                                    state = uiState.list(list),
+                                    breadth = uiState.breadth,
+                                    onDraftChange = { draft -> onTermDraftChange(list, draft) },
+                                    onAdd = { onAddTerm(list) },
+                                    onRemove = { term -> onRemoveTerm(list, term) },
+                                    onMove = { term -> onMoveTerm(list, term) },
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text(stringResource(R.string.editor_discard_title)) },
+            text = { Text(stringResource(R.string.editor_discard_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardDialog = false
+                        onBack()
+                    },
+                ) {
+                    Text(stringResource(R.string.editor_discard_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text(stringResource(R.string.editor_discard_cancel))
+                }
+            },
+        )
     }
 
     if (showDeleteDialog) {
@@ -397,6 +462,7 @@ private fun BlockerEditorPreview() {
             uiState = BlockerEditorUiState(
                 isNew = false,
                 isLoading = false,
+                step = EditorStep.LISTS,
                 name = "2026 Japanese Grand Prix",
                 strong = TermListState(
                     terms = listOf("Japanese Grand Prix", "Suzuka", "#JapaneseGP"),
@@ -405,6 +471,10 @@ private fun BlockerEditorPreview() {
                 weak = TermListState(terms = listOf("Max", "podium", "P1"), draft = "!!!", isDraftRefused = true),
                 sources = TermListState(terms = listOf("FORMULA 1", "Sky Sports F1")),
             ),
+            onDescriptionChange = {},
+            onSuggestTerms = {},
+            onCancelSuggestion = {},
+            onTypeTermsMyself = {},
             onNameChange = {},
             onEnabledChange = {},
             onBreadthChange = {},
